@@ -1,87 +1,134 @@
 # @ouim/simple-logto
 
-A simpler way to use [@logto/react](https://github.com/logto-io/logto) with prebuilt UI components and hooks for fast authentication setup in React apps.
+`@ouim/simple-logto` is a batteries-included auth toolkit for Logto-powered React apps.
 
----
+It wraps `@logto/react` with the pieces most teams end up building anyway:
 
-## Features
+- a higher-level React provider and hook
+- ready-made sign-in, callback, and account UI
+- backend token verification for Node and Next.js
+- bundler fixes for the `jose` edge cases that usually slow setup down
 
-### Frontend Components & Hooks
+If you want Logto without re-assembling the same frontend and backend auth plumbing from scratch, this package is the opinionated fast path.
 
-- **AuthProvider**: Easy context provider for Logto authentication
-- **UserCenter**: Prebuilt user dropdown/avatar for your navbar
-- **CallbackPage**: Handles OAuth callback and popup flows
-- **useAuth**: React hook for accessing user and auth actions
-- **Custom navigation**: Integrates with React Router, Next.js, etc.
-- **Guest mode**: Built-in guest user support with fingerprinting
+## What It Actually Ships
 
-### Backend Authentication
+### Frontend
 
-- **JWT Verification**: Manual JWT verification with JWKS caching
-- **Express.js Middleware**: Ready-to-use Express middleware
-- **Next.js Support**: API routes and middleware helpers
-- **TypeScript Support**: Full TypeScript definitions
+- `AuthProvider` for wiring Logto into your app with less boilerplate
+- `useAuth` for user state, auth actions, and route protection patterns
+- `UserCenter` for a production-ready account dropdown
+- `CallbackPage` for redirect and popup callback handling
+- `SignInPage` for dedicated `/signin` routes
+- `SignInButton` for drop-in sign-in triggers
+- popup sign-in support
+- guest mode support
+- custom navigation support for SPA routers
 
-### Bundler Configuration
+### Backend
 
-- **Vite**: Pre-configured Vite settings
-- **Webpack**: Webpack configuration helpers
-- **Next.js**: Next.js bundler configuration
+- JWT verification against Logto JWKS
+- Express middleware via `createExpressAuthMiddleware`
+- Next.js request verification via `verifyNextAuth`
+- generic `verifyAuth` helper for custom servers and handlers
+- optional scope checks
+- cookie and bearer-token extraction
+- guest-aware auth context support
 
----
+### Build tooling
 
-This library is intended to be a plug-and-play solution for most common use cases, while still allowing you to customize the underlying Logto experience as needed. to save you the hassle of setting up authentication from scratch. and connecting frontend and backend authentication flows.
+- Vite config helpers
+- Webpack config helpers
+- Next.js config helpers
+- a dedicated `bundler-config` entrypoint for build-time imports
 
-But if you need more control over auth flows, you can always fall back to using the official @logto/react
+## Why We Use It
 
-You can start with with @ouim/simple-logto for a quick setup,<br> And you won't find it hard to migrate to the official Logto SDK later if you need more advanced features.
+- Faster first integration: frontend and backend auth can be wired from one package.
+- Better defaults: common auth screens and account UI are already handled.
+- Less glue code: cookie syncing, callback handling, popup flows, and request verification are built in.
+- Easier adoption: you still keep Logto underneath, so you are not boxed into a custom auth system.
 
 ## Installation
 
-```sh
-npm install @ouim/simple-logto
+```bash
+npm install @ouim/simple-logto @logto/react
 ```
+
+Peer dependencies:
+
+- `react`
+- `react-dom`
+- `@logto/react`
 
 ## Quick Start
 
-### Frontend Setup
-
-#### 1. AuthProvider
-
-Wrap your app with `AuthProvider` and pass your Logto config:
+### 1. Wrap your app
 
 ```tsx
 import { AuthProvider } from '@ouim/simple-logto'
 
-const config = {
-  endpoint: 'https://your-logto-endpoint.com',
+const logtoConfig = {
+  endpoint: 'https://your-tenant.logto.app',
   appId: 'your-app-id',
+  resources: ['https://your-api.example.com'],
 }
 
-function App() {
+export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider
-      config={config}
-      callbackUrl="http://localhost:3000/callback"
-      // Optionally: customNavigate for SPA routing
-      // customNavigate={(url, options) => { ... }}
-    >
-      <YourApp />
+    <AuthProvider config={logtoConfig} callbackUrl="http://localhost:3000/callback">
+      {children}
     </AuthProvider>
   )
 }
 ```
 
-#### 2. UserCenter Component
+### 2. Add the callback route
 
-Drop the `UserCenter` component into your navbar for a ready-to-use user menu:
+```tsx
+import { CallbackPage } from '@ouim/simple-logto'
 
-![UserCenter](image.png)
+export default function CallbackRoute() {
+  return <CallbackPage />
+}
+```
+
+### 3. Add a sign-in entry point
+
+```tsx
+import { SignInPage } from '@ouim/simple-logto'
+
+export default function SignInRoute() {
+  return <SignInPage />
+}
+```
+
+### 4. Use auth anywhere
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export function Dashboard() {
+  const { user, isLoadingUser, signIn, signOut } = useAuth()
+
+  if (isLoadingUser) return <div>Loading...</div>
+  if (!user) return <button onClick={() => signIn()}>Sign in</button>
+
+  return (
+    <div>
+      <p>Welcome, {user.name ?? user.id}</p>
+      <button onClick={() => signOut()}>Sign out</button>
+    </div>
+  )
+}
+```
+
+### 5. Add account UI
 
 ```tsx
 import { UserCenter } from '@ouim/simple-logto'
 
-function Navbar() {
+export function Navbar() {
   return (
     <nav className="flex items-center justify-between h-16 px-4 border-b">
       <div className="font-bold">MyApp</div>
@@ -91,322 +138,266 @@ function Navbar() {
 }
 ```
 
-- Shows avatar, name, and sign out when authenticated.
-- Shows sign in button when not authenticated.
-- Accepts optional props:
-  - `className`
-  - `signoutCallbackUrl` (defaults to `/`)
-  - `globalSignOut` (defaults to `true`)
-  - `additionalPages` - array of `{ link: string; text: string; icon?: ReactNode }`
-
-Example adding custom pages:
-
-```tsx
-<UserCenter additionalPages={[{ link: '/settings', text: 'Go to your settings' }]} />
-```
+![UserCenter](image.png)
 
 ![UserCenter logged in](image-1.png)
 
----
+## Frontend API
 
-#### 3. CallbackPage
+### `AuthProvider`
 
-Create a route (e.g. `/callback`) and render `CallbackPage` to handle OAuth redirects:
+Main provider for the package. It wraps Logto, manages auth refresh, and keeps the browser cookie in sync for backend verification.
 
-```tsx
-import { CallbackPage } from '@ouim/simple-logto'
+Props:
 
-export default function Callback() {
-  return <CallbackPage />
-}
-```
+- `config`: Logto config object
+- `callbackUrl?`: default auth callback URL
+- `customNavigate?`: custom navigation function for React Router, Next.js, or other SPA routers
+- `enablePopupSignIn?`: enables popup-based sign-in flow
 
-- Optional props:
-  - `onSuccess`, `onError`, `loadingComponent`, `successComponent`
-
-#### 4. useAuth Hook
-
-Access the current user and authentication actions anywhere in your app:
+Example with custom router navigation:
 
 ```tsx
-import { useAuth } from '@ouim/simple-logto'
-
-function Dashboard() {
-  const { user, isLoadingUser, signIn, signOut } = useAuth()
-
-  if (isLoadingUser) return <div>Loading...</div>
-  if (!user) return <button onClick={() => signIn()}>Sign in</button>
-
-  return (
-    <div>
-      <p>Welcome, {user.name}!</p>
-      <button onClick={() => signOut()}>Sign out</button>
-    </div>
-  )
-}
+<AuthProvider config={logtoConfig} callbackUrl="/callback" customNavigate={url => router.push(url)} enablePopupSignIn>
+  <App />
+</AuthProvider>
 ```
 
-#### 5. useAuth Hook
+### `useAuth`
 
-Access the current user and authentication actions anywhere in your app:
+Returns:
+
+- `user`
+- `isLoadingUser`
+- `signIn`
+- `signOut`
+- `refreshAuth`
+- `enablePopupSignIn`
+
+You can also use it for lightweight route protection:
 
 ```tsx
-import { useAuth } from '@ouim/simple-logto'
-
-function Dashboard() {
-  const { user, isLoadingUser, signIn, signOut, refreshAuth } = useAuth()
-
-  if (isLoadingUser) return <div>Loading...</div>
-  if (!user) return <button onClick={() => signIn()}>Sign in</button>
-
-  return (
-    <div>
-      <p>Welcome, {user.name}!</p>
-      <button onClick={() => signOut()}>Sign out</button>
-      <button onClick={refreshAuth}>Refresh Auth</button>
-    </div>
-  )
-}
+const { user } = useAuth({
+  middleware: 'auth',
+  redirectTo: '/signin',
+})
 ```
 
-##### Route Protection Example
+Guest-only route example:
 
 ```tsx
-function ProtectedPage() {
-  const { user } = useAuth({
-    middleware: 'auth',
-    redirectTo: '/login', // Redirect if not authenticated
-  })
-
-  if (!user) return null // or loading indicator
-  return <div>Protected content</div>
-}
+const auth = useAuth({
+  middleware: 'guest',
+  redirectIfAuthenticated: '/dashboard',
+})
 ```
 
-##### Guest Mode Example
+### `UserCenter`
+
+Prebuilt account dropdown for navbars and app shells.
+
+Supports:
+
+- signed-in and signed-out states
+- local or global sign-out
+- custom account links
+- custom theme class names
 
 ```tsx
-function MixedContent() {
-  const { user } = useAuth({
-    middleware: 'guest', // Allow guest users
-  })
-
-  return <div>{user ? <p>Welcome back, {user.name}!</p> : <p>You're browsing as a guest</p>}</div>
-}
+<UserCenter
+  signoutCallbackUrl="/"
+  globalSignOut={false}
+  additionalPages={[
+    { link: '/settings', text: 'Settings' },
+    { link: '/billing', text: 'Billing' },
+  ]}
+/>
 ```
 
----
+### `CallbackPage`
 
-## Backend Authentication
+Drop this onto your callback route to complete the Logto auth flow.
 
-> **Note:** Express middleware now includes built-in cookie parsing. You don’t need to install or call `cookie-parser` yourself anymore.
+Optional props:
 
-The library includes powerful backend authentication helpers for Node.js applications.
+- `onSuccess`
+- `onError`
+- `loadingComponent`
+- `successComponent`
+- `className`
 
-### Installation
+### `SignInPage`
 
-Backend features are included with the main package:
+Use this when you want a dedicated `/signin` route that automatically initiates the auth flow. It also supports popup-based sign-in windows.
 
-```bash
-npm install @ouim/simple-logto
+### `SignInButton`
+
+For cases where you want a reusable trigger instead of manually calling `signIn()`.
+
+```tsx
+import { SignInButton } from '@ouim/simple-logto'
+
+;<SignInButton />
 ```
 
-### Express.js Middleware
+## Backend API
 
-```javascript
+Import backend helpers from the dedicated subpath:
+
+```ts
+import { createExpressAuthMiddleware, verifyAuth, verifyNextAuth } from '@ouim/simple-logto/backend'
+```
+
+### Express middleware
+
+`createExpressAuthMiddleware` automatically parses cookies for you, so you do not need to add `cookie-parser` yourself.
+
+```ts
+import express from 'express'
 import { createExpressAuthMiddleware } from '@ouim/simple-logto/backend'
 
+const app = express()
+
 const authMiddleware = createExpressAuthMiddleware({
-  logtoUrl: 'https://your-logto-domain.com',
-  audience: 'your-api-resource-identifier', // A url you get when you register your API Resource in Logto, usually something like 'https://yourdomain.com/api'
-  cookieName: 'logto_authtoken', // optional, defaults to 'logto_authtoken'
-  allowGuest: true, // optional, enables guest mode
+  logtoUrl: 'https://your-tenant.logto.app',
+  audience: 'https://your-api.example.com',
+  cookieName: 'logto_authtoken',
+  requiredScope: 'read:profile',
+  allowGuest: true,
 })
 
-// Use in your Express routes
-app.get('/protected', authMiddleware, (req, res) => {
+app.get('/api/me', authMiddleware, (req, res) => {
   res.json({
-    message: 'Hello authenticated user!',
-    userId: req.auth.userId,
-    isAuthenticated: req.auth.isAuthenticated,
-    isGuest: req.auth.isGuest,
+    userId: req.auth?.userId,
+    isAuthenticated: req.auth?.isAuthenticated,
+    isGuest: req.auth?.isGuest,
   })
 })
 ```
 
-### Next.js API Routes
+### Next.js route handlers
 
-```javascript
-// app/api/protected/route.js
+```ts
 import { verifyNextAuth } from '@ouim/simple-logto/backend'
 
-export async function GET(request) {
-  const authResult = await verifyNextAuth(request, {
-    logtoUrl: 'https://your-logto-domain.com',
-    audience: 'your-api-resource-identifier',
-    cookieName: 'logto_authtoken', // optional
-    requiredScope: 'some_scope', // optional
-    allowGuest: true, // optional
+export async function GET(request: Request) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+    allowGuest: false,
   })
 
-  if (!authResult.success) {
-    return Response.json({ error: authResult.error }, { status: 401 })
+  if (!result.success) {
+    return Response.json({ error: result.error }, { status: 401 })
   }
 
   return Response.json({
-    message: 'Hello authenticated user!',
-    userId: authResult.auth.userId,
-    payload: authResult.auth.payload,
+    userId: result.auth.userId,
+    payload: result.auth.payload,
   })
 }
 ```
 
-### Next.js Middleware
+### Generic token verification
 
-```javascript
-// middleware.js
-import { verifyNextAuth } from '@ouim/simple-logto/backend'
-import { NextResponse } from 'next/server'
-
-export async function middleware(request) {
-  if (request.nextUrl.pathname.startsWith('/api/protected')) {
-    const authResult = await verifyNextAuth(request, {
-      logtoUrl: process.env.LOGTO_URL,
-      audience: process.env.LOGTO_AUDIENCE,
-    })
-
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Add auth info to headers for the API route
-    const response = NextResponse.next()
-    response.headers.set('x-user-id', authResult.auth.userId)
-    return response
-  }
-}
-
-export const config = {
-  matcher: '/api/protected/:path*',
-}
-```
-
-### Generic Usage
-
-```javascript
+```ts
 import { verifyAuth } from '@ouim/simple-logto/backend'
 
-// Verify with token string
-try {
-  const auth = await verifyAuth('your-jwt-token', {
-    logtoUrl: 'https://your-logto-domain.com',
-    audience: 'your-api-resource-identifier',
-  })
-
-  console.log('User ID:', auth.userId)
-} catch (error) {
-  console.error('Auth failed:', error.message)
-}
-
-// Verify with request object
-try {
-  const auth = await verifyAuth(requestObject, {
-    logtoUrl: 'https://your-logto-domain.com',
-    audience: 'your-api-resource-identifier',
-  })
-} catch (error) {
-  console.error('Auth failed:', error.message)
-}
+const auth = await verifyAuth('your-jwt-token', {
+  logtoUrl: 'https://your-tenant.logto.app',
+  audience: 'https://your-api.example.com',
+})
 ```
 
-### Backend Configuration Options
+### Backend options
 
-- `logtoUrl`: Your Logto server URL (required)
-- `audience`: Your API resource identifier (required)
-- `cookieName`: Custom cookie name (optional, defaults to 'logto_authtoken')
-- `requiredScope`: Required scope for access (optional)
-- `allowGuest`: Enable guest mode with fingerprinting (optional)
+- `logtoUrl`: required
+- `audience`: required
+- `cookieName?`: defaults to `logto_authtoken`
+- `requiredScope?`: rejects requests missing the given scope
+- `allowGuest?`: enables guest auth fallback
 
-### Auth Context
+### Auth context shape
 
-When authentication is successful, you'll get an `AuthContext` object:
-
-```typescript
+```ts
 interface AuthContext {
-  userId: string | null // User ID from token (null for guests)
-  isAuthenticated: boolean // true for authenticated users
-  isGuest: boolean // true for guest users
-  payload: AuthPayload | null // Full JWT payload (null for guests)
-  guestId?: string // Guest fingerprint ID (when allowGuest is true)
+  userId: string | null
+  isAuthenticated: boolean
+  payload: AuthPayload | null
+  isGuest?: boolean
+  guestId?: string
 }
 ```
 
----
+## Bundler Config
 
-## Bundler Configuration
+This package includes bundler helpers for the `jose` resolution issues that often show up during Logto integration.
 
-The library provides pre-configured bundler settings to resolve common issues with the `jose` library and other dependencies.
+For build-time scripts, prefer the dedicated subpath:
+
+```ts
+import { viteConfig, getBundlerConfig } from '@ouim/simple-logto/bundler-config'
+```
 
 ### Vite
 
-> **Tip:** when editing a Vite config or other build-time script, import directly from the `bundler-config` subpath. This avoids executing the main library bundle (which pulls in React and may trip over runtime internals during Node startup).
-
-```javascript
-// vite.config.js
+```ts
+import { defineConfig } from 'vite'
 import { viteConfig } from '@ouim/simple-logto/bundler-config'
 
-export default {
+export default defineConfig({
   ...viteConfig,
-  // your other config
-}
+})
 ```
 
 ### Webpack
 
-```javascript
-// webpack.config.js
-import { webpackConfig } from '@ouim/simple-logto'
+```ts
+import { webpackConfig } from '@ouim/simple-logto/bundler-config'
 
-module.exports = {
+export default {
   ...webpackConfig,
-  // your other config
 }
 ```
 
 ### Next.js
 
-```javascript
-// next.config.js
-import { nextjsConfig } from '@ouim/simple-logto'
+```ts
+import { nextjsConfig } from '@ouim/simple-logto/bundler-config'
 
-module.exports = {
+const nextConfig = {
   ...nextjsConfig,
-  // your other config
 }
+
+export default nextConfig
 ```
 
-### Custom Configuration
+## TypeScript
 
-```javascript
-// either import from the main entry (exports the whole library) or
-// pull the helpers alone via the dedicated path:
-import { getBundlerConfig } from '@ouim/simple-logto/bundler-config'
+The package ships typed frontend and backend exports.
 
-// Get configuration for specific bundler
-const config = getBundlerConfig('vite') // 'vite' | 'webpack' | 'nextjs'
-```
+```ts
+import type { LogtoUser, AuthOptions, CallbackPageProps, AdditionalPage, SignInButtonProps } from '@ouim/simple-logto'
 
----
-
-## TypeScript Support
-
-The library is written in TypeScript and provides comprehensive type definitions:
-
-```typescript
-import type { LogtoUser, AuthOptions, AuthMiddleware, CallbackPageProps, NavigationOptions, AdditionalPage } from '@ouim/simple-logto'
-
-// Backend types
 import type { AuthContext, AuthPayload, VerifyAuthOptions } from '@ouim/simple-logto/backend'
 ```
 
----
+## Positioning
+
+`@ouim/simple-logto` is best thought of as the practical app-layer around Logto:
+
+- Logto remains the identity platform
+- `@logto/react` remains the core SDK
+- this package adds the missing productized layer most app teams want on day one
+
+If your team eventually needs lower-level control, you can still drop down to the official Logto APIs without throwing your whole auth model away.
+
+## Repository Notes
+
+- frontend and backend helpers are published from the same package
+- backend helpers are exposed from `@ouim/simple-logto/backend`
+- bundler helpers are exposed from `@ouim/simple-logto/bundler-config`
+
+## License
+
+MIT
