@@ -1,6 +1,6 @@
 {
   "name": "@ouim/simple-logto",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A simpler way to use @logto/react with prebuilt UI components and hooks for fast authentication setup",
   "type": "module",
   "main": "dist/index.js",
@@ -11,19 +11,19 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     },
     "./backend": {
+      "types": "./dist/backend/index.d.ts",
       "import": "./dist/backend/index.js",
-      "require": "./dist/backend/index.cjs",
-      "types": "./dist/backend/index.d.ts"
+      "require": "./dist/backend/index.cjs"
     },
     "./bundler-config": {
+      "types": "./dist/bundler-config.d.ts",
       "import": "./dist/bundler-config.js",
-      "require": "./dist/bundler-config.cjs",
-      "types": "./dist/bundler-config.d.ts"
+      "require": "./dist/bundler-config.cjs"
     }
   },
   "browser": {
@@ -34,7 +34,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && tsc --emitDeclarationOnly",
+    "build": "vite build && tsc --project tsconfig.build.json --emitDeclarationOnly",
     "build:tsc": "tsc",
     "dev": "tsc --watch",
     "test": "vitest",

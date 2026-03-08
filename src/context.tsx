@@ -4,6 +4,8 @@ import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
 import { transformUser, setCustomNavigate, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils'
 import type { AuthContextType, AuthProviderProps, LogtoUser } from './types'
 
+const POPUP_AUTH_EVENT_DELAY = 500
+
 // Create auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -46,8 +48,6 @@ const ClientOnly = ({ children }: { children: React.ReactNode }) => {
  * - forceRefresh=true bypasses rate limiting and isLoading checks
  * - 500ms delay after popup signals allow Logto to sync state from shared storage
  * - Three signal sources all use forceRefresh: postMessage, localStorage, popup closure
- * - Console logs added for debugging auth state transitions
- *
  * SIGNAL FLOW:
  * postMessage (primary) → setTimeout(500ms) → loadUser(true) → fetch claims → update user
  * localStorage (fallback) → setTimeout(500ms) → loadUser(true) → fetch claims → update user
@@ -69,6 +69,7 @@ const InternalAuthProvider = ({
   const { isAuthenticated, isLoading, getIdTokenClaims, getAccessToken, signIn: logtoSignIn, signOut: logtoSignOut } = useLogto()
   const [user, setUser] = useState<LogtoUser | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState<boolean>(true)
+  const defaultResource = logtoConfig?.resources?.[0] || 'urn:logto:resource:default'
 
   // Rate limiting to prevent infinite calls
   const lastLoadTime = useRef<number>(0)
@@ -94,7 +95,7 @@ const InternalAuthProvider = ({
       if (isAuthenticated) {
         try {
           const claims = await getIdTokenClaims()
-          const jwt = await getAccessToken(logtoConfig?.resources?.[0] || 'urn:logto:resource:default')
+          const jwt = await getAccessToken(defaultResource)
 
           // Save JWT token to cookie
           if (jwt) {
@@ -104,7 +105,7 @@ const InternalAuthProvider = ({
           setUser(transformUser(claims))
           // Reset error count on success
           errorCount.current = 0
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Error fetching user claims:', error)
           errorCount.current += 1
 
@@ -114,14 +115,14 @@ const InternalAuthProvider = ({
 
           // If we've hit max errors or it's clearly an auth error, force logout
           const isAuthError =
-            error?.message?.includes('invalid') ||
-            error?.message?.includes('expired') ||
-            error?.message?.includes('Grant request is invalid') ||
-            error?.code === 'invalid_grant' ||
+            (error instanceof Error && error.message.includes('invalid')) ||
+            (error instanceof Error && error.message.includes('expired')) ||
+            (error instanceof Error && error.message.includes('Grant request is invalid')) ||
+            (typeof error === 'object' && error !== null && 'code' in error && error.code === 'invalid_grant') ||
             errorCount.current >= MAX_ERROR_COUNT
 
           if (isAuthError) {
-            console.warn('Authentication error detected, forcing logout:', error.message)
+            console.warn('Authentication error detected, forcing logout:', error instanceof Error ? error.message : error)
             try {
               // Force a complete logout to clear all auth state
               await logtoSignOut()
@@ -146,7 +147,7 @@ const InternalAuthProvider = ({
 
       setIsLoadingUser(false)
     },
-    [isLoading, isAuthenticated, getIdTokenClaims, getAccessToken, logtoSignOut],
+    [defaultResource, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, logtoSignOut],
   )
 
   useEffect(() => {
@@ -179,15 +180,13 @@ const InternalAuthProvider = ({
       // Fallback: popup completed auth but window.opener was unavailable, so it wrote to localStorage
       if (e.key === 'simple_logto_signin_complete') {
         localStorage.removeItem('simple_logto_signin_complete')
-        console.log('[AuthProvider] Detected popup completion via localStorage fallback')
         // Use a longer delay and forceRefresh for explicit popup completion events
         setTimeout(() => {
-          console.log('[AuthProvider] Calling loadUser with forceRefresh=true from localStorage signal')
           window.location.reload() // Ensure the app state is updated for the authenticated user
 
           loadUserRef.current(true) // forceRefresh=true to bypass rate limiting
           window.dispatchEvent(new CustomEvent('auth-state-changed'))
-        }, 500)
+        }, POPUP_AUTH_EVENT_DELAY)
       }
     }
 
@@ -236,7 +235,6 @@ const InternalAuthProvider = ({
       }
 
       const shouldUsePopup = usePopup ?? enablePopupSignIn
-      console.log(`SignIn called with usePopup=${shouldUsePopup}, enablePopupSignIn=${enablePopupSignIn}`)
 
       if (!shouldUsePopup) {
         const redirectUrl = overrideCallbackUrl || callbackUrl || window.location.href
@@ -256,15 +254,12 @@ const InternalAuthProvider = ({
         const checkClosed = setInterval(() => {
           if (popup?.closed) {
             clearInterval(checkClosed)
-            console.log('[AuthProvider] Detected popup closed, refreshing auth state')
             // Popup closed - add delay and use forceRefresh to detect auth completion
             setTimeout(() => {
-              console.log('[AuthProvider] Calling loadUser with forceRefresh=true from popup closure detection')
-
               loadUserRef.current(true) // forceRefresh=true to bypass rate limiting and isLoading check
               window.location.reload() // Ensure the app state is updated for the authenticated user
               window.dispatchEvent(new CustomEvent('auth-state-changed'))
-            }, 500)
+            }, POPUP_AUTH_EVENT_DELAY)
           }
         }, 1000)
 
@@ -273,15 +268,13 @@ const InternalAuthProvider = ({
           if (event.origin !== window.location.origin) return
 
           if (event.data.type === 'SIGNIN_SUCCESS' || event.data.type === 'SIGNIN_COMPLETE') {
-            console.log('[AuthProvider] Received popup completion signal:', event.data.type)
             // Add delay to let Logto's internal state update from shared token storage
             // This is crucial because the popup completed auth in a separate context
             setTimeout(() => {
-              console.log('[AuthProvider] Calling loadUser with forceRefresh=true')
               loadUserRef.current(true) // forceRefresh=true to bypass rate limiting
               window.location.reload() // Ensure the app state is updated for the authenticated user
               window.dispatchEvent(new CustomEvent('auth-state-changed'))
-            }, 500)
+            }, POPUP_AUTH_EVENT_DELAY)
             popup?.close()
             clearInterval(checkClosed)
           }

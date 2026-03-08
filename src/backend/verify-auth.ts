@@ -5,19 +5,47 @@ import type { AuthContext, AuthPayload, VerifyAuthOptions, ExpressRequest, Expre
  */
 import cookieParser from 'cookie-parser'
 
+type JsonRecord = Record<string, unknown>
+type JwkKey = JsonRecord & {
+  kid?: string
+  alg?: string
+  kty?: string
+  use?: string
+}
+type NextCookieStore = {
+  get: (name: string) => { value?: string } | undefined
+}
+type ExpressCookieStore = Record<string, string>
+type HeaderMap = {
+  get?: (name: string) => string | null
+  authorization?: string | string[]
+}
+
+function isNextCookieStore(cookies: unknown): cookies is NextCookieStore {
+  return typeof cookies === 'object' && cookies !== null && 'get' in cookies && typeof cookies.get === 'function'
+}
+
+function isExpressCookieStore(cookies: unknown): cookies is ExpressCookieStore {
+  return typeof cookies === 'object' && cookies !== null
+}
+
+function isHeaderMap(headers: unknown): headers is HeaderMap {
+  return typeof headers === 'object' && headers !== null
+}
+
 // Cache for JWKs to avoid fetching on every request
-const jwksCache = new Map<string, { keys: any[]; expires: number }>()
+const jwksCache = new Map<string, { keys: JwkKey[]; expires: number }>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Extract guest token from cookie
  */
-function extractGuestTokenFromCookies(cookies: any, cookieName: string = 'guest_logto_authtoken'): string | null {
-  if (typeof cookies?.get === 'function') {
+function extractGuestTokenFromCookies(cookies: unknown, cookieName: string = 'guest_logto_authtoken'): string | null {
+  if (isNextCookieStore(cookies)) {
     // Next.js cookies
     const cookie = cookies.get(cookieName)
     return cookie?.value || generateUUID()
-  } else if (cookies && typeof cookies === 'object') {
+  } else if (isExpressCookieStore(cookies)) {
     // Express cookies
     return cookies[cookieName] || generateUUID()
   }
@@ -27,12 +55,12 @@ function extractGuestTokenFromCookies(cookies: any, cookieName: string = 'guest_
 /**
  * Extract token from cookie
  */
-function extractTokenFromCookies(cookies: any, cookieName: string = 'logto_authtoken'): string | null {
-  if (typeof cookies?.get === 'function') {
+function extractTokenFromCookies(cookies: unknown, cookieName: string = 'logto_authtoken'): string | null {
+  if (isNextCookieStore(cookies)) {
     // Next.js cookies
     const cookie = cookies.get(cookieName)
     return cookie?.value || null
-  } else if (cookies && typeof cookies === 'object') {
+  } else if (isExpressCookieStore(cookies)) {
     // Express cookies
     return cookies[cookieName] || null
   }
@@ -42,7 +70,11 @@ function extractTokenFromCookies(cookies: any, cookieName: string = 'logto_autht
 /**
  * Extract token from Authorization header (Bearer token)
  */
-function extractBearerTokenFromHeaders(headers: any): string | null {
+function extractBearerTokenFromHeaders(headers: unknown): string | null {
+  if (!isHeaderMap(headers)) {
+    return null
+  }
+
   const authorization = typeof headers.get === 'function' ? headers.get('authorization') : headers.authorization
 
   if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
@@ -77,7 +109,7 @@ function base64UrlDecode(str: string): string {
 /**
  * Fetch JWKS from Logto server with caching
  */
-async function fetchJWKS(logtoUrl: string): Promise<any[]> {
+async function fetchJWKS(logtoUrl: string): Promise<JwkKey[]> {
   // Ensure logtoUrl has no trailing slash
   const normalizedLogtoUrl = logtoUrl.replace(/\/+$/, '')
   const jwksUrl = `${normalizedLogtoUrl}/oidc/jwks`
@@ -113,7 +145,7 @@ async function fetchJWKS(logtoUrl: string): Promise<any[]> {
 /**
  * Find the appropriate key from JWKS for token verification
  */
-function findMatchingKey(keys: any[], kid?: string, alg?: string): any {
+function findMatchingKey(keys: JwkKey[], kid?: string, alg?: string): JwkKey {
   if (!keys || keys.length === 0) {
     throw new Error('No keys found in JWKS')
   }
@@ -142,8 +174,10 @@ function findMatchingKey(keys: any[], kid?: string, alg?: string): any {
 /**
  * Manually verify JWT token claims
  */
-function verifyTokenClaims(payload: any, options: VerifyAuthOptions): void {
+function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): void {
   const { logtoUrl, audience, requiredScope } = options
+  const exp = typeof payload.exp === 'number' ? payload.exp : undefined
+  const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
   const expectedIssuer = new URL(`oidc`, logtoUrl).toString()
 
@@ -159,12 +193,12 @@ function verifyTokenClaims(payload: any, options: VerifyAuthOptions): void {
 
   // Verify expiration
   const now = Math.floor(Date.now() / 1000)
-  if (payload.exp && payload.exp < now) {
+  if (exp && exp < now) {
     throw new Error('Token has expired')
   }
 
   // Verify not before
-  if (payload.nbf && payload.nbf > now) {
+  if (nbf && nbf > now) {
     throw new Error('Token is not yet valid')
   }
 
@@ -373,7 +407,7 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
   // Returned middleware ensures cookies are parsed if not already available
   return async (req: ExpressRequest, res: ExpressResponse, next: ExpressNext) => {
     if (!req.cookies) {
-      parser(req as any, res as any, async (err: any) => {
+      parser(req as Parameters<typeof parser>[0], res as Parameters<typeof parser>[1], async err => {
         if (err) {
           return next(err)
         }
@@ -548,7 +582,7 @@ export async function verifyNextAuth(
  * @throws {Error} If token verification fails or no token found and guest mode disabled
  */
 export async function verifyAuth(
-  tokenOrRequest: string | { cookies?: any; headers?: any },
+  tokenOrRequest: string | { cookies?: unknown; headers?: unknown },
   options: VerifyAuthOptions,
 ): Promise<AuthContext> {
   let token: string

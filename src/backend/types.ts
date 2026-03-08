@@ -1,7 +1,7 @@
 export interface AuthPayload {
   sub: string // user ID
   scope: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface AuthContext {
@@ -29,10 +29,10 @@ export interface ExpressRequest {
 
 export interface ExpressResponse {
   status: (code: number) => ExpressResponse
-  json: (obj: any) => ExpressResponse
+  json: (obj: unknown) => ExpressResponse
 }
 
-export type ExpressNext = (err?: any) => void
+export type ExpressNext = (err?: unknown) => void
 
 // Next.js types
 export interface NextRequest {
@@ -45,5 +45,5 @@ export interface NextRequest {
 }
 
 export interface NextResponse {
-  json: (body: any, init?: { status?: number }) => NextResponse
+  json: (body: unknown, init?: { status?: number }) => NextResponse
 }

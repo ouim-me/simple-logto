@@ -108,13 +108,13 @@ describe('Express/Next.js Middleware Auth Flow', () => {
 
         await new Promise<void>(resolve => {
           middleware(testReq, testRes, () => {
-            nextCalled = true
+            _nextCalled = true
             resolve()
           })
           setTimeout(resolve, 50)
         })
 
-        expect(nextCalled).toBe(true)
+        expect(_nextCalled).toBe(true)
         expect(testReq.auth).toBeTruthy()
       })
 
@@ -142,7 +142,7 @@ describe('Express/Next.js Middleware Auth Flow', () => {
           setTimeout(resolve, 50)
         })
 
-        expect(nextCalled).toBe(true)
+        expect(_nextCalled).toBe(true)
         expect(testReq.auth).toBeTruthy()
       })
 

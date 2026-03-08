@@ -29,6 +29,15 @@
     ],
     "@typescript-eslint/no-explicit-any": "warn"
   },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "react-hooks/exhaustive-deps": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["dist", "node_modules", ".next"],
   "settings": {
     "react": {

@@ -15,10 +15,16 @@ export default defineConfig({
       formats: ['es', 'cjs'],
     },
     rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+          return
+        }
+        warn(warning)
+      },
       // react/jsx-runtime is used by TypeScript's automatic JSX transform
       // and would otherwise be inlined into the build. mark it external so
       // the runtime comes from the consumer's React package instead.
-      external: ['react', 'react-dom', '@logto/react', 'jose', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      external: ['react', 'react-dom', '@logto/react', 'jose', 'cookie-parser', 'crypto', 'node:crypto', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       output: {
         globals: {
           react: 'React',

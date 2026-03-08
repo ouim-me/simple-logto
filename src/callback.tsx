@@ -74,8 +74,6 @@ export const CallbackPage: React.FC<CallbackPageProps> = ({ className = '', load
       // so also check the sessionStorage flag set by SignInPage.
       const isPopup = (window.opener && window.opener !== window) || sessionStorage.getItem('simple_logto_popup_flow') === 'true'
 
-      console.log({ isPopup })
-
       if (onSuccess) {
         onSuccess()
       }
@@ -101,10 +99,8 @@ export const CallbackPage: React.FC<CallbackPageProps> = ({ className = '', load
         }
 
         // Small delay to ensure message is sent before closing
-        console.log('[CallbackPage] Attempting to close popup')
         setTimeout(() => {
           window.close()
-          console.log('[CallbackPage] Close popup called')
         }, 100)
       }
     } catch (error) {
