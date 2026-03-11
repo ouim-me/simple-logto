@@ -97,14 +97,21 @@ const InternalAuthProvider = ({
           const claims = await getIdTokenClaims()
           const jwt = await getAccessToken(defaultResource)
 
-          // Save JWT token to cookie
           if (jwt) {
+            // Only set user as logged in if we actually have a valid access token
             jwtCookieUtils.saveToken(jwt)
+            setUser(transformUser(claims))
+            // Reset error count on success
+            errorCount.current = 0
+          } else {
+            // Refresh token expired (e.g. user was gone > 30 days) — session is dead.
+            // The Logto SDK still reports isAuthenticated=true because it reads stale
+            // localStorage, but we have no usable token, so we must log out cleanly.
+            console.warn('Access token unavailable — session likely expired. Forcing logout.')
+            setUser(null)
+            jwtCookieUtils.removeToken()
+            await logtoSignOut()
           }
-
-          setUser(transformUser(claims))
-          // Reset error count on success
-          errorCount.current = 0
         } catch (error: unknown) {
           console.error('Error fetching user claims:', error)
           errorCount.current += 1
