@@ -1,6 +1,6 @@
 {
   "name": "@ouim/simple-logto",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A simpler way to use @logto/react with prebuilt UI components and hooks for fast authentication setup",
   "type": "module",
   "main": "dist/index.js",
