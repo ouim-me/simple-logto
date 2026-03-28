@@ -106,7 +106,8 @@
 - [x] **4.1 — Add GitHub Actions CI workflow** Create `.github/workflows/ci.yml` that runs on every push and PR: install deps → lint → type-check → test → build. Block merges if any step fails.
   > Created `.github/workflows/ci.yml` triggered on push/PR to `master` and `rc`. Runs a matrix across Node 18, 20, and 22 with four sequential steps: `npm run lint` → `npx tsc --noEmit` (type-check without emitting) → `npx vitest run` (single-pass tests) → `npm run build`. All steps must pass; GitHub's branch-protection "require status checks" setting can be pointed at this workflow to block merges on failure.
 
-- [ ] **4.2 — Add automated publish workflow** Create `.github/workflows/publish.yml` triggered on GitHub Release creation. It should run the full CI suite, then `npm publish --access public`. Store the npm token as a GitHub secret.
+- [x] **4.2 — Add automated publish workflow** Create `.github/workflows/publish.yml` triggered on GitHub Release creation. It should run the full CI suite, then `npm publish --access public`. Store the npm token as a GitHub secret.
+  > Created `.github/workflows/publish.yml` triggered on `release: created`. Runs the identical CI gate (lint → type-check → test → build) before publishing, so a broken release can never reach npm. Publishes with `--provenance` (npm's signed-attestation feature, requires `id-token: write` permission) for supply-chain transparency. The npm token must be stored as `NPM_TOKEN` in the repo's GitHub Secrets.
 
 - [ ] **4.3 — Add `CHANGELOG.md` and commit convention enforcement** Add a `CHANGELOG.md` starting at v0.1.8. Enforce Conventional Commits via `commitlint` + `husky` pre-commit hook. Use `standard-version` or `semantic-release` to auto-generate changelog entries on release.
 
