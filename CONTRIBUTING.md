@@ -105,7 +105,7 @@ npx husky install
    npm run lint && npx tsc --noEmit && npx vitest run && npm run build
    ```
 4. **Open a PR against `rc`** — not `master`.
-5. Ensure the GitHub Actions **CI** workflow passes (all Node matrix jobs must be green).
+5. Ensure the GitHub Actions **CI** workflow passes (the single `Lint · Type-check · Test · Build` job on Node 20 must be green).
 6. Request a review from a maintainer. At least **one approval** is required before merge.
 7. PRs are merged with **Squash and Merge** to keep a clean linear history on `rc`.
 
@@ -121,7 +121,7 @@ The following rules are enforced in GitHub repository settings (Settings → Bra
 |------|---------|
 | Require a pull request before merging | ✅ Enabled |
 | Required approvals | 1 |
-| Require status checks to pass | ✅ CI (`Lint · Type-check · Test · Build` — all 3 Node versions) |
+| Require status checks to pass | ✅ CI (`Lint · Type-check · Test · Build`) |
 | Require branches to be up to date before merging | ✅ Enabled |
 | Restrict who can push directly | Maintainers only |
 | Allow force pushes | ❌ Disabled |
@@ -133,7 +133,7 @@ The following rules are enforced in GitHub repository settings (Settings → Bra
 |------|---------|
 | Require a pull request before merging | ✅ Enabled |
 | Required approvals | 1 |
-| Require status checks to pass | ✅ CI (all 3 Node versions) |
+| Require status checks to pass | ✅ CI (`Lint · Type-check · Test · Build`) |
 | Allow force pushes | ❌ Disabled |
 
 > **For maintainers:** These rules must be configured in the GitHub UI (or via the GitHub API / Terraform). They cannot be enforced from within the repository itself.
