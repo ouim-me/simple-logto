@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master, rc]
+  pull_request:
+    branches: [master, rc]
+
+jobs:
+  ci:
+    name: Lint · Type-check · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        # npm ci fails on Linux when the lockfile was generated on Windows
+        # because Windows npm only writes the win32 esbuild optional binary.
+        # npm install respects the lockfile for all pinned deps while resolving
+        # the correct platform-specific optional binaries for the runner OS.
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --project tsconfig.build.json --noEmit
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build

@@ -401,6 +401,7 @@ const InternalAuthProvider = ({
 
         // Declared before handleMessage so the closure can reference it once assigned.
         // Also tracked in a ref so the provider's unmount cleanup can clear it.
+        // eslint-disable-next-line prefer-const -- two-phase: declared here for closure, assigned after handleMessage is defined
         let cleanupTimeoutId: ReturnType<typeof setTimeout> | undefined
 
         // Listen for the popup to close or complete authentication.
