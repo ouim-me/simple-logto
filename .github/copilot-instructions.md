@@ -6,7 +6,8 @@ This repository contains a small monolithic library for simplifying Logto authen
 
 - Language: **TypeScript with ES modules** targeting `ES2020`.
 - The `tsconfig.json` enables `strict` mode and common safety flags (`noUnusedLocals`, `noFallthroughCasesInSwitch`, etc.). Follow these expectations when adding new code.
-- No linter configuration is present; use the existing source as examples for formatting:
+- Linting is configured via `.eslintrc.json` at the root (TypeScript ESLint + `eslint-plugin-react` + `eslint-plugin-react-hooks`). Run `npm run lint` to check and `npm run lint:fix` for auto-fixes.
+- Use the existing source as examples for formatting:
   - `src/*.ts(x)` files show idiomatic exports, functional React components, and `async/await` usage.
   - Keep imports ordered logically (external packages first, then internal paths).
 - All new exports must be re‑exported in `src/index.ts` so they become part of the package API.
@@ -22,12 +23,36 @@ This repository contains a small monolithic library for simplifying Logto authen
 
 ## Build and Test
 
-- **Install dependencies**: `npm install` (workspace has no tests).
+- **Install dependencies**: `npm install`
 - **Build** the library with `npm run build` which runs `vite build` and `tsc --emitDeclarationOnly`.
 - `npm run clean` removes the `dist` folder.
 - During development you can run `npm run dev` to watch TypeScript; the library does not include a runnable demo application.
 
-_Note: there are no automated tests in this repository; any new functionality should be manually verified by integrating it into a consuming project or adding new example files._
+### Automated Tests
+
+The repository uses **Vitest** with `happy-dom` and `@testing-library/react`. Run the test suite with:
+
+```bash
+npm test                          # watch mode
+npx vitest run                    # single pass (used in CI)
+npx vitest run src/useAuth.test.tsx  # run a single file
+npm run test:coverage             # with coverage report
+```
+
+Test setup is in `vitest.setup.ts` (imports `@testing-library/jest-dom` matchers).
+
+**Test files:**
+
+| File | What it covers |
+|---|---|
+| `src/context.test.tsx` | `AuthProvider` initialization and token refresh |
+| `src/useAuth.test.tsx` | `useAuth` hook — state, redirect, middleware |
+| `src/callback.test.tsx` | `CallbackPage` redirect and popup flows |
+| `src/user-center.test.tsx` | `UserCenter` component rendering and navigation |
+| `src/backend/verify-auth.test.ts` | JWT verification, JWKS cache, audience/issuer checks |
+| `src/backend/middleware.test.ts` | Express and Next.js middleware — valid/invalid/guest tokens |
+
+**Coverage policy:** All new functionality must be accompanied by unit tests. Backend code (JWT verification, middleware) should target ≥ 80 % statement coverage. PRs that reduce coverage will be flagged in review.
 
 ## Project Conventions
 
