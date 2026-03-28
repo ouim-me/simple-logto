@@ -19,17 +19,23 @@
 
 **Priority: 🔴 Critical**
 
-- [ ] **1.1 — Move `vitest` to `devDependencies`** `vitest` is currently listed under `dependencies`, causing ~50+ MB of dev tooling to be installed in every consumer's `node_modules`. Move it to `devDependencies`.
+- [X] **1.1 — Move `vitest` to `devDependencies`** `vitest` is currently listed under `dependencies`, causing ~50+ MB of dev tooling to be installed in every consumer's `node_modules`. Move it to `devDependencies`.
+  > Removed `vitest` from `dependencies` and added it alongside `@vitest/ui` in `devDependencies`. The `@vitest/ui` sibling entry was already in devDeps, so this is now consistent.
 
-- [ ] **1.2 — Fix stale package name in `bundler-config.ts`** `getBundlerConfig()` returns a Vite `optimizeDeps.include` array containing `@ouim/better-logto-react` (the old package name). Any consumer spreading this config into their Vite config adds a non-existent package to their build. Replace with the current package name `@ouim/simple-logto` or remove entirely.
+- [X] **1.2 — Fix stale package name in `bundler-config.ts`** `getBundlerConfig()` returns a Vite `optimizeDeps.include` array containing `@ouim/better-logto-react` (the old package name). Any consumer spreading this config into their Vite config adds a non-existent package to their build. Replace with the current package name `@ouim/simple-logto` or remove entirely.
+  > Replaced `@ouim/better-logto-react` with `@ouim/simple-logto` in the `optimizeDeps.include` array inside the `vite` case of `getBundlerConfig()`. The stale name was the only occurrence in the file.
 
-- [ ] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+- [X] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+  > Updated both `react` and `react-dom` peer dependency ranges to include `^18.0.0`. React 18 is currently the dominant version in use, so this was a significant gap causing spurious npm warnings on install.
 
-- [ ] **1.4 — Fix JWT audience array support (RFC 7519 compliance)** `verifyTokenClaims` compares `payload.aud !== audience` using strict equality. RFC 7519 allows `aud` to be a string array. If Logto issues a multi-audience token, legitimate users are rejected. Update the check to handle both `string` and `string[]` for `aud`.
+- [X] **1.4 — Fix JWT audience array support (RFC 7519 compliance)** `verifyTokenClaims` compares `payload.aud !== audience` using strict equality. RFC 7519 allows `aud` to be a string array. If Logto issues a multi-audience token, legitimate users are rejected. Update the check to handle both `string` and `string[]` for `aud`.
+  > Updated the audience check in `verifyTokenClaims` to use `Array.isArray(aud) ? aud.includes(audience) : aud === audience`. Also added explicit `aud?: string | string[]` (and other standard JWT claims) to the `AuthPayload` interface in `types.ts` for proper typing.
 
-- [ ] **1.5 — Fix inconsistent issuer construction in `verifyTokenClaims`** The JWKS fetch uses string concatenation (`${normalizedLogtoUrl}/oidc/jwks`) while issuer verification uses `new URL('oidc', logtoUrl)`. These produce different results when `logtoUrl` has a path suffix. Unify both to use the same URL construction strategy.
+- [X] **1.5 — Fix inconsistent issuer construction in `verifyTokenClaims`** The JWKS fetch uses string concatenation (`${normalizedLogtoUrl}/oidc/jwks`) while issuer verification uses `new URL('oidc', logtoUrl)`. These produce different results when `logtoUrl` has a path suffix. Unify both to use the same URL construction strategy.
+  > Replaced `new URL('oidc', logtoUrl).toString()` with `\`${normalizedLogtoUrl}/oidc\`` in `verifyTokenClaims`, mirroring the same strip-trailing-slash + append pattern used by `fetchJWKS`. The `new URL` relative resolution would silently replace the last path segment when `logtoUrl` contained a path (e.g. `https://host/tenant` → `https://host/oidc` instead of `https://host/tenant/oidc`).
 
-- [ ] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
+- [X] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
+  > Replaced all three `generateUUID()` fallbacks in `extractGuestTokenFromCookies` with `null`. Guest identity is established on the frontend (which sets the persistent `guest_logto_authtoken` cookie); the backend should only read it. When no cookie exists `guestId` resolves to `undefined` in the auth context, which is the correct "no guest identity yet" signal to callers.
 
 ---
 

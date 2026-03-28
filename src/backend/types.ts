@@ -1,6 +1,11 @@
 export interface AuthPayload {
   sub: string // user ID
   scope: string
+  iss?: string // issuer
+  aud?: string | string[] // audience — RFC 7519 §4.1.3 allows string or array
+  exp?: number // expiration time (Unix seconds)
+  nbf?: number // not before (Unix seconds)
+  iat?: number // issued at (Unix seconds)
   [key: string]: unknown
 }
 
@@ -14,7 +19,7 @@ export interface AuthContext {
 
 export interface VerifyAuthOptions {
   logtoUrl: string
-  audience: string
+  audience?: string // optional — many callers (e.g. allowGuest flows) don't target a specific API resource
   cookieName?: string
   requiredScope?: string
   allowGuest?: boolean

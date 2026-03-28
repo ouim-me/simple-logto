@@ -40,16 +40,17 @@ const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 /**
  * Extract guest token from cookie
  */
-function extractGuestTokenFromCookies(cookies: unknown, cookieName: string = 'guest_logto_authtoken'): string | null {
+function extractGuestTokenFromCookies(cookies: unknown, cookieName: string = 'guest_logto_authtoken'): string | undefined {
   if (isNextCookieStore(cookies)) {
     // Next.js cookies
     const cookie = cookies.get(cookieName)
-    return cookie?.value || generateUUID()
+    return cookie?.value ?? undefined
   } else if (isExpressCookieStore(cookies)) {
     // Express cookies
-    return cookies[cookieName] || generateUUID()
+    return cookies[cookieName] ?? undefined
   }
-  return generateUUID()
+  // No recognisable cookie store — guest identity is unknown
+  return undefined
 }
 
 /**
@@ -179,16 +180,24 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined
   const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
-  const expectedIssuer = new URL(`oidc`, logtoUrl).toString()
+  // Normalize URL the same way fetchJWKS does (strip trailing slashes, then append)
+  // Using new URL('oidc', logtoUrl) is incorrect when logtoUrl has a path suffix because
+  // relative URL resolution replaces the last path segment rather than appending.
+  const normalizedLogtoUrl = logtoUrl.replace(/\/+$/, '')
+  const expectedIssuer = `${normalizedLogtoUrl}/oidc`
 
   // Verify issuer
   if (payload.iss !== expectedIssuer) {
     throw new Error(`Invalid issuer. Expected: ${expectedIssuer}, Got: ${payload.iss}`)
   }
 
-  // Verify audience
-  if (audience && payload.aud !== audience) {
-    throw new Error(`Invalid audience. Expected: ${audience}, Got: ${payload.aud}`)
+  // Verify audience — RFC 7519 allows aud to be a string or a string array
+  if (audience) {
+    const aud = payload.aud
+    const isValid = Array.isArray(aud) ? aud.includes(audience) : aud === audience
+    if (!isValid) {
+      throw new Error(`Invalid audience. Expected: ${audience}, Got: ${Array.isArray(aud) ? JSON.stringify(aud) : aud}`)
+    }
   }
 
   // Verify expiration
@@ -365,7 +374,7 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
             isAuthenticated: false,
             payload: null,
             isGuest: true,
-            guestId: guestId || undefined,
+            guestId,
           }
 
           return next()

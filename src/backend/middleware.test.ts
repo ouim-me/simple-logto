@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createExpressAuthMiddleware, verifyNextAuth, verifyLogtoToken } from './verify-auth'
-import type { VerifyAuthOptions, _AuthContext, _ExpressRequest, _ExpressResponse, _ExpressNext } from './types'
+import type { VerifyAuthOptions } from './types'
 
 // Mock jose library
 vi.mock('jose', () => ({
@@ -356,7 +356,7 @@ describe('Express/Next.js Middleware Auth Flow', () => {
         expect(nextCalled).toBe(true)
       })
 
-      it('should generate guest ID when not in cookies', async () => {
+      it('should leave guestId undefined when no guest cookie present', async () => {
         const guestOptions = { ...mockOptions, allowGuest: true }
         const middleware = createExpressAuthMiddleware(guestOptions)
 
@@ -380,8 +380,9 @@ describe('Express/Next.js Middleware Auth Flow', () => {
         })
 
         expect(req.auth).toBeDefined()
-        expect(req.auth.guestId).toBeTruthy()
-        expect(typeof req.auth.guestId).toBe('string')
+        expect(req.auth.isGuest).toBe(true)
+        // No guest cookie was present — backend must not fabricate an ID
+        expect(req.auth.guestId).toBeUndefined()
       })
     })
 
