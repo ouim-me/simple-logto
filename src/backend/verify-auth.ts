@@ -509,9 +509,10 @@ export async function verifyNextAuth(
           guestId: guestId || undefined,
         }
 
+        // A valid guest session is a success — callers should use `auth.isGuest` to
+        // distinguish guests from authenticated users rather than checking `success`.
         return {
-          success: false,
-          error: 'No authentication token found',
+          success: true,
           auth: guestAuth,
         }
       }
@@ -529,7 +530,9 @@ export async function verifyNextAuth(
       auth: authContext,
     }
   } catch (error) {
-    // If allowGuest is enabled and token verification fails, fall back to guest
+    // If allowGuest is enabled and token verification fails, fall back to guest.
+    // A degraded guest session is still a valid session — callers use `auth.isGuest`
+    // to distinguish guests from authenticated users.
     if (options.allowGuest) {
       const guestId = extractGuestTokenFromCookies(request.cookies)
 
@@ -542,8 +545,7 @@ export async function verifyNextAuth(
       }
 
       return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        success: true,
         auth: guestAuth,
       }
     }

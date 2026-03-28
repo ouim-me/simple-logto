@@ -41,6 +41,8 @@ export interface CallbackPageProps {
   successComponent?: React.ReactNode
   onSuccess?: () => void
   onError?: (error: Error) => void
+  /** URL to redirect to after successful authentication. Defaults to `'/'`. */
+  redirectTo?: string
 }
 
 // Define keyframes for spin animation
@@ -51,7 +53,7 @@ const spinKeyframes = `
   }
 `
 
-export const CallbackPage: React.FC<CallbackPageProps> = ({ className = '', loadingComponent, successComponent, onSuccess, onError }) => {
+export const CallbackPage: React.FC<CallbackPageProps> = ({ className = '', loadingComponent, successComponent, onSuccess, onError, redirectTo = '/' }) => {
   const callbackHandled = useRef(false)
 
   useEffect(() => {
@@ -77,9 +79,9 @@ export const CallbackPage: React.FC<CallbackPageProps> = ({ className = '', load
       if (onSuccess) {
         onSuccess()
       }
-      // If not a popup, redirect to the home page or a specific URL
+      // If not a popup, redirect to the configured destination (defaults to '/')
       if (!isPopup) {
-        window.location.href = '/'
+        window.location.href = redirectTo
       } else {
         // Clean up the popup flag before closing
         sessionStorage.removeItem('simple_logto_popup_flow')

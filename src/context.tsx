@@ -237,7 +237,12 @@ const InternalAuthProvider = ({
       if (isInPopup) {
         // If we're already in a popup, just do direct sign-in without opening another popup
         const redirectUrl = overrideCallbackUrl || callbackUrl || window.location.href
-        await logtoSignIn(redirectUrl)
+        try {
+          await logtoSignIn(redirectUrl)
+        } catch (error) {
+          console.error('Sign-in failed:', error)
+          throw error
+        }
         return
       }
 
@@ -245,7 +250,12 @@ const InternalAuthProvider = ({
 
       if (!shouldUsePopup) {
         const redirectUrl = overrideCallbackUrl || callbackUrl || window.location.href
-        await logtoSignIn(redirectUrl)
+        try {
+          await logtoSignIn(redirectUrl)
+        } catch (error) {
+          console.error('Sign-in failed:', error)
+          throw error
+        }
       } else {
         // Use popup sign-in
         const popupWidth = 500
@@ -257,9 +267,18 @@ const InternalAuthProvider = ({
         // Use the signin page route - assume user has it at /signin
         const popup = window.open('/signin?popup=true', 'SignInPopup', popupFeatures)
 
+        if (!popup) {
+          // Popup was blocked by the browser — no interval is running, nothing to clean up
+          console.warn('Sign-in popup was blocked by the browser. Users may need to allow popups for this site.')
+          return
+        }
+
+        // Declared before handleMessage so the closure can reference it once assigned
+        let cleanupTimeoutId: ReturnType<typeof setTimeout> | undefined
+
         // Listen for the popup to close or complete authentication
         const checkClosed = setInterval(() => {
-          if (popup?.closed) {
+          if (popup.closed) {
             clearInterval(checkClosed)
             // Popup closed - add delay and use forceRefresh to detect auth completion
             setTimeout(() => {
@@ -275,6 +294,11 @@ const InternalAuthProvider = ({
           if (event.origin !== window.location.origin) return
 
           if (event.data.type === 'SIGNIN_SUCCESS' || event.data.type === 'SIGNIN_COMPLETE') {
+            // Cancel the 5-minute stale cleanup and remove all listeners immediately
+            clearTimeout(cleanupTimeoutId)
+            window.removeEventListener('message', handleMessage)
+            clearInterval(checkClosed)
+            popup.close()
             // Add delay to let Logto's internal state update from shared token storage
             // This is crucial because the popup completed auth in a separate context
             setTimeout(() => {
@@ -282,20 +306,19 @@ const InternalAuthProvider = ({
               window.location.reload() // Ensure the app state is updated for the authenticated user
               window.dispatchEvent(new CustomEvent('auth-state-changed'))
             }, POPUP_AUTH_EVENT_DELAY)
-            popup?.close()
-            clearInterval(checkClosed)
           }
         }
 
         window.addEventListener('message', handleMessage)
 
-        // Cleanup listener when popup closes
+        // Cleanup listener and poll interval (called on 5-minute timeout)
         const cleanupListener = () => {
           window.removeEventListener('message', handleMessage)
           clearInterval(checkClosed)
         }
 
-        setTimeout(cleanupListener, 300000) // 5 minutes timeout
+        // Auto-cleanup after 5 minutes if popup neither completes nor closes
+        cleanupTimeoutId = setTimeout(cleanupListener, 300000)
       }
     },
     [enablePopupSignIn, callbackUrl, logtoSignIn],

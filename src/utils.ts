@@ -45,7 +45,7 @@ export const validateLogtoConfig = (config: LogtoConfig): void => {
 
   // Optional: Check for resources (audience) - log warning if not present
   // This is optional because some apps might not need it
-  if (!config.resources || Object.keys(config.resources).length === 0) {
+  if (!config.resources || config.resources.length === 0) {
     console.warn(
       'Warning: No `resources` configured in Logto config. ' +
         'If you need to access protected backend APIs with JWTs, ensure at least one resource is configured. ' +
