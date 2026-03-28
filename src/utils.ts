@@ -323,7 +323,29 @@ export const cookieUtils = {
  */
 export const jwtCookieUtils = {
   /**
-   * Save JWT token to cookie
+   * Save JWT token to cookie.
+   *
+   * ⚠️  SECURITY NOTICE — XSS / non-httpOnly cookie
+   * ─────────────────────────────────────────────────────────────────────────
+   * This cookie is set from JavaScript, which means it cannot carry the
+   * `HttpOnly` flag. Any JavaScript that runs on the same origin — including
+   * injected scripts from an XSS vulnerability — can read the raw JWT value
+   * from `document.cookie` and exfiltrate it.
+   *
+   * The cookie is still protected by `Secure` (HTTPS-only) and
+   * `SameSite=Strict` (blocks cross-site request forgery), but those flags do
+   * NOT prevent access by same-origin JavaScript.
+   *
+   * MITIGATIONS:
+   *   1. Keep a strict Content-Security-Policy to reduce XSS attack surface.
+   *   2. If your deployment includes a Node.js backend that handles the
+   *      callback redirect, use `buildAuthCookieHeader()` from
+   *      `@ouim/simple-logto/backend` to set an `HttpOnly` version of the
+   *      same cookie from the server side. The browser will then send it
+   *      automatically and it will be invisible to JavaScript.
+   *
+   * See: https://owasp.org/www-community/HttpOnly
+   * ─────────────────────────────────────────────────────────────────────────
    */
   saveToken: (token: string) => {
     cookieUtils.setCookie('logto_authtoken', token, {

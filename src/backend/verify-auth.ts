@@ -738,3 +738,91 @@ export async function verifyAuth(
     throw error
   }
 }
+
+/**
+ * Build a `Set-Cookie` header string that sets the auth token as an `HttpOnly` cookie.
+ *
+ * ## Why this exists — the XSS / non-httpOnly problem
+ *
+ * The client-side `jwtCookieUtils.saveToken()` sets the auth token from JavaScript.
+ * Because `HttpOnly` can only be set by the **server** (via a `Set-Cookie` response
+ * header), the client-set cookie is readable by any same-origin JavaScript, including
+ * scripts injected by an XSS attack.
+ *
+ * If your deployment includes a backend (Express, Next.js, etc.) that handles the
+ * post-authentication callback, you can upgrade security by having the server re-set
+ * the cookie with `HttpOnly`. The browser will then attach it to every request
+ * automatically and JavaScript can no longer read it.
+ *
+ * ## Recommended flow
+ *
+ * ```
+ * 1. Frontend CallbackPage exchanges the auth code via Logto SDK (as normal).
+ * 2. Frontend sends the obtained JWT to a backend endpoint, e.g. POST /api/session.
+ * 3. Backend verifies the JWT with verifyLogtoToken(), then calls buildAuthCookieHeader()
+ *    and sets it on the response.
+ * 4. The browser now holds an HttpOnly cookie — the frontend no longer needs to store
+ *    the JWT in its own document.cookie.
+ * ```
+ *
+ * @param {string} token - The verified JWT string to store in the cookie.
+ * @param {object} [options]
+ * @param {string} [options.cookieName='logto_authtoken'] - Cookie name. Must match the
+ *   `cookieName` used by the backend middleware so it finds the token on subsequent requests.
+ * @param {number} [options.maxAge=604800] - Cookie lifetime in **seconds** (default: 7 days).
+ * @param {string} [options.domain] - Cookie domain (omit to use the current host).
+ * @param {string} [options.path='/'] - Cookie path.
+ * @param {'Strict'|'Lax'|'None'} [options.sameSite='Strict'] - SameSite policy.
+ *   Use `'None'` only if you need the cookie on cross-site requests (requires `Secure`).
+ *
+ * @returns {string} A complete `Set-Cookie` header value ready to pass to `res.setHeader`.
+ *
+ * @example
+ * // Express — upgrade to HttpOnly after verifying the token
+ * import express from 'express';
+ * import { verifyLogtoToken, buildAuthCookieHeader } from '@ouim/simple-logto/backend';
+ *
+ * app.post('/api/session', async (req, res) => {
+ *   const token = req.body.token; // JWT sent from the frontend after Logto callback
+ *   const auth = await verifyLogtoToken(token, { logtoUrl: process.env.LOGTO_ENDPOINT });
+ *   const cookie = buildAuthCookieHeader(token);
+ *   res.setHeader('Set-Cookie', cookie);
+ *   res.json({ userId: auth.userId });
+ * });
+ *
+ * @example
+ * // Next.js Route Handler — same pattern
+ * import { verifyLogtoToken, buildAuthCookieHeader } from '@ouim/simple-logto/backend';
+ *
+ * export async function POST(request: Request) {
+ *   const { token } = await request.json();
+ *   const auth = await verifyLogtoToken(token, { logtoUrl: process.env.LOGTO_ENDPOINT });
+ *   const cookie = buildAuthCookieHeader(token);
+ *   return new Response(JSON.stringify({ userId: auth.userId }), {
+ *     headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookie },
+ *   });
+ * }
+ */
+export function buildAuthCookieHeader(
+  token: string,
+  options: {
+    cookieName?: string
+    maxAge?: number
+    domain?: string
+    path?: string
+    sameSite?: 'Strict' | 'Lax' | 'None'
+  } = {},
+): string {
+  const {
+    cookieName = 'logto_authtoken',
+    maxAge = 7 * 24 * 60 * 60, // 7 days in seconds
+    domain,
+    path = '/',
+    sameSite = 'Strict',
+  } = options
+
+  // encodeURIComponent keeps the JWT characters safe inside the cookie value.
+  let header = `${cookieName}=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=${path}; HttpOnly; Secure; SameSite=${sameSite}`
+  if (domain) header += `; Domain=${domain}`
+  return header
+}
