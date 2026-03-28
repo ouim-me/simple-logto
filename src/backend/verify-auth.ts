@@ -179,7 +179,11 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined
   const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
-  const expectedIssuer = new URL(`oidc`, logtoUrl).toString()
+  // Normalize URL the same way fetchJWKS does (strip trailing slashes, then append)
+  // Using new URL('oidc', logtoUrl) is incorrect when logtoUrl has a path suffix because
+  // relative URL resolution replaces the last path segment rather than appending.
+  const normalizedLogtoUrl = logtoUrl.replace(/\/+$/, '')
+  const expectedIssuer = `${normalizedLogtoUrl}/oidc`
 
   // Verify issuer
   if (payload.iss !== expectedIssuer) {
