@@ -111,7 +111,8 @@
 
 - [ ] **4.3 — Add `CHANGELOG.md` and commit convention enforcement** Add a `CHANGELOG.md` starting at v0.1.8. Enforce Conventional Commits via `commitlint` + `husky` pre-commit hook. Use `standard-version` or `semantic-release` to auto-generate changelog entries on release.
 
-- [ ] **4.4 — Add branch protection rules documentation** Document in `CONTRIBUTING.md` that `master` requires a passing CI check and one review before merge. (Actual rule enforcement is done in the GitHub repo settings, not code.)
+- [x] **4.4 — Add branch protection rules documentation** Document in `CONTRIBUTING.md` that `master` requires a passing CI check and one review before merge. (Actual rule enforcement is done in the GitHub repo settings, not code.)
+  > Created `CONTRIBUTING.md` covering: local dev setup, running tests, Conventional Commits convention (with scope table and breaking-change syntax), PR process (branch off `rc`, gate commands, squash-merge policy), branch protection tables for both `master` and `rc` (required checks, approval count, force-push disabled), and the full release process (CHANGELOG → version bump → RC merge → GitHub Release triggers publish workflow).
 
 - [x] **4.5 — Fix stale `copilot-instructions.md`** `.github/copilot-instructions.md` states "there are no automated tests in this repository," which is false. Update it to reflect the current test structure and coverage policy.
   > Replaced the stale "no automated tests" note with a full **Automated Tests** section listing all 6 test files with descriptions, the commands to run them (`npm test`, `npx vitest run`, coverage), and the coverage policy. Also corrected the linter section which falsely claimed "No linter configuration is present" — the repo does have `.eslintrc.json`; updated that line to describe it accurately.
