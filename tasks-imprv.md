@@ -19,22 +19,27 @@
 
 **Priority: 🔴 Critical**
 
-- [X] **1.1 — Move `vitest` to `devDependencies`** `vitest` is currently listed under `dependencies`, causing ~50+ MB of dev tooling to be installed in every consumer's `node_modules`. Move it to `devDependencies`.
+- [x] **1.1 — Move `vitest` to `devDependencies`** `vitest` is currently listed under `dependencies`, causing ~50+ MB of dev tooling to be installed in every consumer's `node_modules`. Move it to `devDependencies`.
+
   > Removed `vitest` from `dependencies` and added it alongside `@vitest/ui` in `devDependencies`. The `@vitest/ui` sibling entry was already in devDeps, so this is now consistent.
 
-- [X] **1.2 — Fix stale package name in `bundler-config.ts`** `getBundlerConfig()` returns a Vite `optimizeDeps.include` array containing `@ouim/better-logto-react` (the old package name). Any consumer spreading this config into their Vite config adds a non-existent package to their build. Replace with the current package name `@ouim/simple-logto` or remove entirely.
+- [x] **1.2 — Fix stale package name in `bundler-config.ts`** `getBundlerConfig()` returns a Vite `optimizeDeps.include` array containing `@ouim/better-logto-react` (the old package name). Any consumer spreading this config into their Vite config adds a non-existent package to their build. Replace with the current package name `@ouim/simple-logto` or remove entirely.
+
   > Replaced `@ouim/better-logto-react` with `@ouim/simple-logto` in the `optimizeDeps.include` array inside the `vite` case of `getBundlerConfig()`. The stale name was the only occurrence in the file.
 
-- [X] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+- [x] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+
   > Updated both `react` and `react-dom` peer dependency ranges to include `^18.0.0`. React 18 is currently the dominant version in use, so this was a significant gap causing spurious npm warnings on install.
 
-- [X] **1.4 — Fix JWT audience array support (RFC 7519 compliance)** `verifyTokenClaims` compares `payload.aud !== audience` using strict equality. RFC 7519 allows `aud` to be a string array. If Logto issues a multi-audience token, legitimate users are rejected. Update the check to handle both `string` and `string[]` for `aud`.
+- [x] **1.4 — Fix JWT audience array support (RFC 7519 compliance)** `verifyTokenClaims` compares `payload.aud !== audience` using strict equality. RFC 7519 allows `aud` to be a string array. If Logto issues a multi-audience token, legitimate users are rejected. Update the check to handle both `string` and `string[]` for `aud`.
+
   > Updated the audience check in `verifyTokenClaims` to use `Array.isArray(aud) ? aud.includes(audience) : aud === audience`. Also added explicit `aud?: string | string[]` (and other standard JWT claims) to the `AuthPayload` interface in `types.ts` for proper typing.
 
-- [X] **1.5 — Fix inconsistent issuer construction in `verifyTokenClaims`** The JWKS fetch uses string concatenation (`${normalizedLogtoUrl}/oidc/jwks`) while issuer verification uses `new URL('oidc', logtoUrl)`. These produce different results when `logtoUrl` has a path suffix. Unify both to use the same URL construction strategy.
-  > Replaced `new URL('oidc', logtoUrl).toString()` with `\`${normalizedLogtoUrl}/oidc\`` in `verifyTokenClaims`, mirroring the same strip-trailing-slash + append pattern used by `fetchJWKS`. The `new URL` relative resolution would silently replace the last path segment when `logtoUrl` contained a path (e.g. `https://host/tenant` → `https://host/oidc` instead of `https://host/tenant/oidc`).
+- [x] **1.5 — Fix inconsistent issuer construction in `verifyTokenClaims`** The JWKS fetch uses string concatenation (`${normalizedLogtoUrl}/oidc/jwks`) while issuer verification uses `new URL('oidc', logtoUrl)`. These produce different results when `logtoUrl` has a path suffix. Unify both to use the same URL construction strategy.
 
-- [X] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
+  > Replaced `new URL('oidc', logtoUrl).toString()` with `\`${normalizedLogtoUrl}/oidc\``in`verifyTokenClaims`, mirroring the same strip-trailing-slash + append pattern used by `fetchJWKS`. The `new URL`relative resolution would silently replace the last path segment when`logtoUrl`contained a path (e.g.`https://host/tenant`→`https://host/oidc`instead of`https://host/tenant/oidc`).
+
+- [x] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
   > Replaced all three `generateUUID()` fallbacks in `extractGuestTokenFromCookies` with `null`. Guest identity is established on the frontend (which sets the persistent `guest_logto_authtoken` cookie); the backend should only read it. When no cookie exists `guestId` resolves to `undefined` in the auth context, which is the correct "no guest identity yet" signal to callers.
 
 ---
@@ -46,21 +51,27 @@
 **Priority: 🟠 High**
 
 - [x] **2.1 — Fix popup sign-in race condition and unnecessary reload** `context.tsx` calls `loadUserRef.current(true)` then immediately `window.location.reload()`, discarding all async work. The reload is a blunt workaround for Logto SDK sync issues. Replace with a proper state update after `handleSignInCallback` resolves, or add a short delay only if the SDK truly requires it. Document the reason if a reload is truly unavoidable.
+
   > Removed `window.location.reload()` from all three popup-completion paths (postMessage handler, localStorage fallback handler, and popup-closed poll handler). All three were calling `loadUserRef.current(true)` and `window.location.reload()` on the same synchronous tick; the reload navigated away and killed the in-flight async state update, making the `loadUserRef` call dead code. The `POPUP_AUTH_EVENT_DELAY` (500 ms) is sufficient for Logto's React SDK to sync from shared localStorage before `loadUserRef.current(true)` fetches claims. Extended the top-of-file comment block to document this decision and describe when a conditional reload (post-failure) would be appropriate.
 
 - [x] **2.2 — Fix dangling `setTimeout` in popup cleanup** The `cleanupListener` timeout (300,000 ms) is never cleared on successful popup completion. The `SIGNIN_SUCCESS` handler calls `clearInterval` and `popup?.close()` but does not call `cleanupListener()`. Add `cleanupListener()` to the success path to prevent a stale callback from firing 5 minutes later.
+
   > Stored the `setTimeout` return value in `let cleanupTimeoutId` (declared before `handleMessage` so the closure can reference it). In the success handler, `clearTimeout(cleanupTimeoutId)` is called first, then the listener removal and interval cancellation are inlined, removing the dependency on calling `cleanupListener()` and avoiding a forward-reference issue. The 5-minute stale callback can no longer fire after a successful auth.
 
 - [x] **2.3 — Fix `signIn` function lacking try/catch** If `logtoSignIn` throws, the error propagates to the caller with no cleanup, potentially leaving the popup polling interval running. Wrap `logtoSignIn` calls in try/catch and ensure interval cleanup occurs on all error paths.
+
   > Added try/catch around both `logtoSignIn` calls (the `isInPopup` redirect path and the `!shouldUsePopup` direct redirect path). Also added a null-check guard immediately after `window.open()`: when the browser blocks the popup, the function now returns early before any interval or listener is created, preventing orphaned cleanup state.
 
 - [x] **2.4 — Fix hard-coded post-callback redirect to `/`** `CallbackPage` always redirects to `window.location.href = '/'` on success. There is no prop to configure the post-auth redirect destination. Add a `redirectTo` prop (defaulting to `/`) so consumers can control where users land after authentication.
+
   > Added `redirectTo?: string` (with JSDoc) to `CallbackPageProps` and defaulted it to `'/'` in the component signature. The redirect line now uses `window.location.href = redirectTo`. Existing behaviour is unchanged for consumers that don't pass the prop.
 
 - [x] **2.5 — Fix `validateLogtoConfig` using `Object.keys` on an array** `resources` in `LogtoConfig` is `string[]`, not a plain object. `Object.keys([]).length === 0` happens to work but is semantically wrong and fragile. Replace with a direct `.length` check on the array.
+
   > Replaced `Object.keys(config.resources).length === 0` with `config.resources.length === 0` in `validateLogtoConfig`. The old form worked coincidentally because `Object.keys` on an array returns numeric index strings, but it is semantically incorrect and would silently break if the type ever became a plain object.
 
 - [x] **2.6 — Fix `verifyNextAuth` returning `success: false` for valid guests** When `allowGuest: true` and the token fails verification, `verifyNextAuth` returns `{ success: false, auth: <guestContext> }`. A caller checking only `result.success` will treat the guest as an auth failure. Change the return shape to `{ success: true, auth: guestContext }` for valid guest sessions, or use a separate `isGuest` flag.
+
   > Both guest paths in `verifyNextAuth` (no-token + `allowGuest`, and verification-error + `allowGuest`) now return `{ success: true, auth: guestContext }`. Callers should distinguish guests via `result.auth.isGuest`. The middleware tests that were asserting the old `success: false` shape were updated to assert `success: true` and include an explanatory comment.
 
 - [x] **2.7 — Fix `MAX_ERROR_COUNT` forcing sign-out on transient network errors** Three consecutive `getAccessToken` failures trigger `logtoSignOut`. A brief network outage will log out the user. Distinguish between auth errors (4xx) and transient errors (network timeout, 5xx) and only sign out on confirmed auth failures. Add exponential backoff for transient errors.
@@ -75,21 +86,27 @@
 **Priority: 🟠 High**
 
 - [x] **3.1 — Document XSS/cookie security limitation and provide `httpOnly` guidance** The auth token is stored in a non-`httpOnly` cookie, making it accessible to XSS. Since `httpOnly` cannot be set from JavaScript, document this limitation clearly. Provide a backend-assisted cookie-setting example where the server sets a proper `httpOnly`, `Secure`, `SameSite=Strict` cookie on behalf of the client.
+
   > Added a prominent ⚠️ SECURITY NOTICE block to `jwtCookieUtils.saveToken()` in `utils.ts` documenting the XSS limitation, what `Secure` + `SameSite=Strict` do/don't protect, and two concrete mitigations. Added `buildAuthCookieHeader(token, options)` to the backend entrypoint — generates a `Set-Cookie` header with `HttpOnly; Secure; SameSite=Strict` so backends can upgrade the cookie after verifying it. Includes full JSDoc with Express and Next.js `@example` blocks showing the recommended backend-assisted flow.
 
 - [x] **3.2 — Add CSRF protection helpers for backend middleware** The Express and Next.js middleware only validates the JWT. Mutation endpoints (POST/PUT/DELETE) are vulnerable to CSRF. Provide a `csrfMiddleware` helper or integrate with an existing CSRF library, and document the threat model clearly.
+
   > Created `src/backend/csrf.ts` (exported from `src/backend/index.ts`) implementing the double-submit cookie pattern with no new dependencies. Exports: `generateCsrfToken()` (uses `globalThis.crypto.randomUUID` / `node:crypto` fallback), `buildCsrfCookieHeader()` (non-HttpOnly by design — JS must read it), `createCsrfMiddleware()` (Express: issues cookie on GET, validates on POST/PUT/PATCH/DELETE), `verifyCsrfToken()` (Next.js Route Handler helper returning `{ valid, error? }`), and the `CSRF_COOKIE_NAME` / `CSRF_HEADER_NAME` constants. The module header documents the full threat model: what CSRF is, how the double-submit pattern blocks it via same-origin policy, and explicit limitations (defence-in-depth only, not a CSP replacement).
 
 - [x] **3.3 — Replace `Math.random()` UUID fallback with `crypto` in backend** `verify-auth.ts` uses `Math.random()` as a UUID fallback in the backend guest path. `Math.random()` is not cryptographically secure. Replace with `crypto.randomUUID()` (Node 16+) or `crypto.getRandomValues` for older Node targets.
+
   > The `generateUUID()` function was dead code — task 1.6 had already removed all three call sites that used it. Rather than replacing the `Math.random()` body with `crypto.randomUUID()`, the entire dead function was deleted. There is no longer any UUID generation in the backend; guest IDs come exclusively from the frontend cookie set by `guestUtils`.
 
 - [x] **3.4 — Add JWKS cache invalidation on key rotation** If Logto rotates its signing keys, the 5-minute cache window causes a hard failure window. On JWT verification failure, invalidate the cached JWKS and retry once with a fresh fetch before returning the error to the caller.
+
   > Extracted the inner key-lookup + signature verification into a `verifyWithKeys()` helper. `verifyLogtoToken` now catches errors from `verifyWithKeys` and classifies them: if the error message indicates a key/signature problem (kid not found, signature verification failed, no keys), the cache entry is deleted and verification is retried once with a freshly fetched JWKS. Claims errors (wrong audience, expired token, missing scope) are explicitly NOT retried to avoid masking legitimate auth failures.
 
 - [x] **3.5 — Validate JWT payload fields before use** `payload.sub`, `payload.aud`, `payload.iss`, etc. are used without null/undefined checks after `jose` decodes the token. Add a schema validation step (e.g., using `zod` or manual checks) on the decoded payload fields before trusting them.
+
   > Added `validatePayloadShape(payload: unknown): asserts payload is AuthPayload` — a TypeScript assertion function using manual checks (no `zod` dep). It verifies: `sub` is a non-empty string (required), `iss` is a string if present, `exp`/`nbf` are numbers if present, and `aud` is a `string | string[]` if present. Called inside `verifyWithKeys()` immediately after `jwtVerify()` returns, before any claim is accessed downstream. Avoids `zod` to keep the dep footprint minimal.
 
 - [x] **3.6 — Harden postMessage origin check in popup flow** The `SIGNIN_SUCCESS` postMessage handler verifies `event.origin !== window.location.origin` but does not verify that `event.source === popup`. A same-origin script could spoof the success message. Add `event.source === popupRef.current` to the check.
+
   > Added `if (event.source !== popup) return` as a second guard in `handleMessage`, immediately after the origin check. The `popup` variable is already in closure scope (it's the `window.open()` return value), so no refactoring was needed. Added a block comment explaining both vectors being guarded against (cross-origin and same-origin spoof).
 
 - [x] **3.7 — Make cookie security settings consistent across auth and guest cookies** `logto_authtoken` cookie uses `Secure: true` and `sameSite: 'strict'` via `cookieUtils.setCookie`. The guest ID cookie (`guestUtils.setGuestId`) uses a raw `document.cookie` string without `Secure`. Unify all cookie writes through a single `cookieUtils.setCookie` call with consistent security flags.
@@ -104,14 +121,19 @@
 **Priority: 🟠 High**
 
 - [x] **4.1 — Add GitHub Actions CI workflow** Create `.github/workflows/ci.yml` that runs on every push and PR: install deps → lint → type-check → test → build. Block merges if any step fails.
+
   > Created `.github/workflows/ci.yml` triggered on push/PR to `master` and `rc`. Runs a matrix across Node 18, 20, and 22 with four sequential steps: `npm run lint` → `npx tsc --noEmit` (type-check without emitting) → `npx vitest run` (single-pass tests) → `npm run build`. All steps must pass; GitHub's branch-protection "require status checks" setting can be pointed at this workflow to block merges on failure.
 
 - [x] **4.2 — Add automated publish workflow** Create `.github/workflows/publish.yml` triggered on GitHub Release creation. It should run the full CI suite, then `npm publish --access public`. Store the npm token as a GitHub secret.
+
   > Created `.github/workflows/publish.yml` triggered on `release: created`. Runs the identical CI gate (lint → type-check → test → build) before publishing, so a broken release can never reach npm. Publishes with `--provenance` (npm's signed-attestation feature, requires `id-token: write` permission) for supply-chain transparency. The npm token must be stored as `NPM_TOKEN` in the repo's GitHub Secrets.
 
-- [ ] **4.3 — Add `CHANGELOG.md` and commit convention enforcement** Add a `CHANGELOG.md` starting at v0.1.8. Enforce Conventional Commits via `commitlint` + `husky` pre-commit hook. Use `standard-version` or `semantic-release` to auto-generate changelog entries on release.
+- [x] **4.3 — Add `CHANGELOG.md` and commit convention enforcement** Add a `CHANGELOG.md` starting at v0.1.8. Enforce Conventional Commits via `commitlint` + `husky` pre-commit hook. Use `standard-version` or `semantic-release` to auto-generate changelog entries on release.
+
+  > Created `CHANGELOG.md` starting at v0.1.8 with an `[Unreleased]` section summarising all Phase 1–4 work. Installed `@commitlint/cli` + `@commitlint/config-conventional` + `husky` as devDependencies. Created `commitlint.config.js` (ESM, extends conventional, adds project-scope enum, 72-char header limit). Initialised husky via `npx husky init` (`prepare: "husky"` in `package.json`): `.husky/pre-commit` runs `npm run lint`; `.husky/commit-msg` runs `commitlint --edit`. `standard-version`/`semantic-release` left as a future choice — the Keep-a-Changelog format used here is compatible with both.
 
 - [x] **4.4 — Add branch protection rules documentation** Document in `CONTRIBUTING.md` that `master` requires a passing CI check and one review before merge. (Actual rule enforcement is done in the GitHub repo settings, not code.)
+
   > Created `CONTRIBUTING.md` covering: local dev setup, running tests, Conventional Commits convention (with scope table and breaking-change syntax), PR process (branch off `rc`, gate commands, squash-merge policy), branch protection tables for both `master` and `rc` (required checks, approval count, force-push disabled), and the full release process (CHANGELOG → version bump → RC merge → GitHub Release triggers publish workflow).
 
 - [x] **4.5 — Fix stale `copilot-instructions.md`** `.github/copilot-instructions.md` states "there are no automated tests in this repository," which is false. Update it to reflect the current test structure and coverage policy.
@@ -181,13 +203,13 @@
 
 - [ ] **7.3 — Document the implicit `/signin` route requirement for popup flow** The popup flow requires a `/signin` route to exist. This is not mentioned in the README. Add a note in the Popup Sign-In section explaining this dependency.
 
-- [ ] **7.4 — Add migration guide for breaking changes** Create `MIGRATION.md` with a section for each minor version bump that introduced breaking changes. Start with the rename from `@ouim/better-logto-react` to `@ouim/simple-logto`.
+<!-- SKIP this- [ ] **7.4 — Add migration guide for breaking changes** Create `MIGRATION.md` with a section for each minor version bump that introduced breaking changes. Start with the rename from `@ouim/better-logto-react` to `@ouim/simple-logto`. -->
 
 - [ ] **7.5 — Add `CODE_OF_CONDUCT.md`** Add the Contributor Covenant or equivalent CoC file as expected by GitHub's community standards checker.
 
-- [ ] **7.6 — Add security policy (`SECURITY.md`)** Document how to responsibly report security vulnerabilities (e.g., private GitHub security advisory), the disclosure timeline, and the supported versions.
+<!-- Skip this- [ ] **7.6 — Add security policy (`SECURITY.md`)** Document how to responsibly report security vulnerabilities (e.g., private GitHub security advisory), the disclosure timeline, and the supported versions. -->
 
-- [ ] **7.7 — Update `copilot-instructions.md` with accurate test and architecture info** Replace stale content with current architecture overview, test patterns, and how to run/add tests.
+<!-- - [ ] **7.7 — Update `copilot-instructions.md` with accurate test and architecture info** Replace stale content with current architecture overview, test patterns, and how to run/add tests. -->
 
 - [ ] **7.8 — Add JSDoc examples for all backend exports** `verifyAuth`, `expressAuthMiddleware`, `verifyNextAuth`, `nextAuthMiddleware` all have JSDoc but lack `@example` blocks. Add minimal, copy-pasteable examples for each.
 
@@ -248,5 +270,3 @@
 - [ ] **10.6 — Publish to JSR (JavaScript Registry) in addition to npm** JSR is the modern registry for TypeScript-first packages. Adding a `jsr.json` and publishing there increases discoverability in the Deno and modern TypeScript ecosystem.
 
 - [ ] **10.7 — Add GitHub issue and PR templates** Create `.github/ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, and `PULL_REQUEST_TEMPLATE.md` to guide contributors and reduce low-quality issues.
-
-- [ ] **10.8 — Archive or convert `todo.md` to GitHub Issues** Move all items in `todo.md` to tracked GitHub Issues with labels (`bug`, `enhancement`, `security`). The file can remain as a high-level index linking to issues, but individual tracking should be on GitHub for public visibility.
