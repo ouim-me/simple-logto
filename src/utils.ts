@@ -382,29 +382,27 @@ export const guestUtils = {
    * Get guest ID from cookie
    */
   getGuestId(): string | null {
-    if (typeof document === 'undefined') return null
-
-    const cookies = document.cookie.split(';')
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=')
-      if (name === 'guest_logto_authtoken') {
-        return value
-      }
-    }
-    return null
+    return cookieUtils.getCookie('guest_logto_authtoken')
   },
 
   /**
    * Set guest ID cookie
+   *
+   * Uses cookieUtils.setCookie so that the same security flags applied to the
+   * auth token cookie (Secure, SameSite=strict) are also applied here, making
+   * both cookies consistent. The Secure flag is enforced regardless of the
+   * current protocol so that the guest ID is never sent over plain HTTP.
    */
   async setGuestId(guestId?: string): Promise<string> {
     if (typeof document === 'undefined') return guestId || ''
 
     const id = guestId || (await this.generateGuestId())
-    const expires = new Date()
-    expires.setDate(expires.getDate() + 7) // 7 days
-
-    document.cookie = `guest_logto_authtoken=${id}; expires=${expires.toUTCString()}; path=/; SameSite=Strict`
+    cookieUtils.setCookie('guest_logto_authtoken', id, {
+      expires: 7, // 7 days (matches jwtCookieUtils.saveToken)
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    })
     return id
   },
 
@@ -423,9 +421,7 @@ export const guestUtils = {
    * Clear guest ID cookie
    */
   clearGuestId(): void {
-    if (typeof document === 'undefined') return
-
-    document.cookie = 'guest_logto_authtoken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict'
+    cookieUtils.removeCookie('guest_logto_authtoken', { path: '/' })
   },
 }
 
