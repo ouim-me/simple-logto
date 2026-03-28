@@ -38,6 +38,21 @@ const jwksCache = new Map<string, { keys: JwkKey[]; expires: number }>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 /**
+ * Normalize a Logto base URL to its OIDC base path.
+ *
+ * Used by both JWKS URL construction and issuer verification so both always
+ * produce the same string from the same input, preventing cache-key mismatches
+ * if the normalization logic were ever changed in one place but not the other.
+ *
+ * @example
+ * buildOidcBaseUrl('https://tenant.logto.app/')  // → 'https://tenant.logto.app/oidc'
+ * buildOidcBaseUrl('https://host/tenant')         // → 'https://host/tenant/oidc'
+ */
+function buildOidcBaseUrl(logtoUrl: string): string {
+  return `${logtoUrl.replace(/\/+$/, '')}/oidc`
+}
+
+/**
  * Extract guest token from cookie
  */
 function extractGuestTokenFromCookies(cookies: unknown, cookieName: string = 'guest_logto_authtoken'): string | undefined {
@@ -111,9 +126,7 @@ function base64UrlDecode(str: string): string {
  * Fetch JWKS from Logto server with caching
  */
 async function fetchJWKS(logtoUrl: string): Promise<JwkKey[]> {
-  // Ensure logtoUrl has no trailing slash
-  const normalizedLogtoUrl = logtoUrl.replace(/\/+$/, '')
-  const jwksUrl = `${normalizedLogtoUrl}/oidc/jwks`
+  const jwksUrl = `${buildOidcBaseUrl(logtoUrl)}/jwks`
   const now = Date.now()
 
   // Check cache first
@@ -180,11 +193,9 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined
   const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
-  // Normalize URL the same way fetchJWKS does (strip trailing slashes, then append)
-  // Using new URL('oidc', logtoUrl) is incorrect when logtoUrl has a path suffix because
-  // relative URL resolution replaces the last path segment rather than appending.
-  const normalizedLogtoUrl = logtoUrl.replace(/\/+$/, '')
-  const expectedIssuer = `${normalizedLogtoUrl}/oidc`
+  // Use the shared URL builder so the expected issuer string is always derived
+  // the same way as the JWKS URL (avoids silent drift if normalization changes).
+  const expectedIssuer = buildOidcBaseUrl(logtoUrl)
 
   // Verify issuer
   if (payload.iss !== expectedIssuer) {
@@ -200,14 +211,15 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
     }
   }
 
-  // Verify expiration
   const now = Math.floor(Date.now() / 1000)
-  if (exp && exp < now) {
+
+  // Use `!== undefined` (not a truthy check) so that exp/nbf === 0 is correctly
+  // treated as an expired / not-yet-valid token rather than being silently skipped.
+  if (exp !== undefined && exp < now) {
     throw new Error('Token has expired')
   }
 
-  // Verify not before
-  if (nbf && nbf > now) {
+  if (nbf !== undefined && nbf > now) {
     throw new Error('Token is not yet valid')
   }
 
@@ -218,14 +230,140 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
 }
 
 /**
+ * Validate the shape of a raw JWT payload before trusting its fields.
+ *
+ * `jose`'s `jwtVerify` returns `JWTPayload` where all standard claims are optional.
+ * This function asserts that every field we rely on is present and of the correct type
+ * so that downstream code never operates on unexpected `undefined` / wrong-type values.
+ *
+ * @throws {Error} If any required or typed claim is absent or of the wrong type.
+ */
+function validatePayloadShape(payload: unknown): asserts payload is AuthPayload {
+  if (typeof payload !== 'object' || payload === null) {
+    throw new Error('JWT payload is missing or not an object')
+  }
+
+  const p = payload as Record<string, unknown>
+
+  // `sub` (subject / user ID) is required — the rest of the library depends on it.
+  if (typeof p.sub !== 'string' || p.sub.trim() === '') {
+    throw new Error('JWT payload is missing required field "sub" (user ID)')
+  }
+
+  // `iss` (issuer) is required. Logto OIDC tokens always include it and
+  // verifyTokenClaims enforces the exact value. Making it required here ensures
+  // the issuer check can never be silently skipped if call order were ever changed.
+  if (typeof p.iss !== 'string' || p.iss.trim() === '') {
+    throw new Error('JWT payload is missing required field "iss" (issuer)')
+  }
+
+  if (p.exp !== undefined && typeof p.exp !== 'number') {
+    throw new Error('JWT payload field "exp" must be a number')
+  }
+  if (p.nbf !== undefined && typeof p.nbf !== 'number') {
+    throw new Error('JWT payload field "nbf" must be a number')
+  }
+  if (p.aud !== undefined) {
+    const aud = p.aud
+    const isValid =
+      typeof aud === 'string' || (Array.isArray(aud) && aud.every(a => typeof a === 'string'))
+    if (!isValid) {
+      throw new Error('JWT payload field "aud" must be a string or string[]')
+    }
+  }
+  // `scope` is typed as required in AuthPayload but may be absent in some token
+  // varieties (e.g. M2M tokens with no scopes). Validate the type if present so
+  // downstream string operations on `payload.scope` never receive a non-string.
+  if (p.scope !== undefined && typeof p.scope !== 'string') {
+    throw new Error('JWT payload field "scope" must be a string')
+  }
+}
+
+/**
+ * Classify whether an error indicates a JWKS key-rotation failure.
+ *
+ * Only errors that definitively point to a stale cached JWKS — a missing kid
+ * or a failed signature — should trigger cache invalidation and a retry.
+ *
+ * Errors that indicate bad token claims (audience, issuer, expiry, scope) must
+ * NOT be retried; they will return the same error after a fresh JWKS fetch and
+ * retrying only adds latency and unnecessary network requests.
+ *
+ * Checks our own `findMatchingKey` error messages by prefix (not free-text substring)
+ * and jose structured error codes via the `.code` property so the check stays correct
+ * across jose version changes and is immune to incidental keyword matches in claim
+ * error messages (e.g. "Expected: api-key, Got: ..." containing "key").
+ */
+function isKeyRotationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+
+  // Our own findMatchingKey errors — plain Error, not jose errors.
+  // Check by prefix so we don't accidentally match other messages.
+  if (
+    error.message.startsWith('No keys found in JWKS') ||
+    error.message.startsWith('Key with kid')
+  ) {
+    return true
+  }
+
+  // jose structured error codes.
+  const code = (error as { code?: unknown }).code
+  return (
+    code === 'ERR_JWKS_NO_MATCHING_KEY' ||
+    code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'
+  )
+}
+
+/**
+ * Verify a token against a specific set of JWKS keys.
+ *
+ * Separated from `verifyLogtoToken` so that the outer function can call this helper
+ * twice when JWKS cache invalidation + retry is needed (key rotation scenario).
+ *
+ * @throws {Error} On key-lookup failure, signature verification failure, or claims mismatch.
+ */
+async function verifyWithKeys(
+  token: string,
+  header: Record<string, unknown>,
+  keys: JwkKey[],
+  options: VerifyAuthOptions,
+): Promise<AuthContext> {
+  const kid = typeof header.kid === 'string' ? header.kid : undefined
+  const alg = typeof header.alg === 'string' ? header.alg : undefined
+
+  const jwk = findMatchingKey(keys, kid, alg)
+  const publicKey = await importJWK(jwk, alg || 'RS256')
+  const { payload: rawPayload } = await jwtVerify(token, publicKey)
+
+  // Validate payload shape before trusting any field (task 3.5)
+  validatePayloadShape(rawPayload)
+
+  // Validate all business claims (issuer, audience, expiry, scope)
+  verifyTokenClaims(rawPayload, options)
+
+  return {
+    userId: rawPayload.sub,
+    isAuthenticated: true,
+    payload: rawPayload,
+    isGuest: false,
+  }
+}
+
+/**
  * Verify JWT Token from Logto
  *
  * Verifies a Logto JWT token by:
  * 1. Decoding the JWT header to extract key ID (kid) and algorithm
- * 2. Fetching the JWKS (JSON Web Key Set) from Logto's OIDC endpoint
+ * 2. Fetching the JWKS (JSON Web Key Set) from Logto's OIDC endpoint (cached, 5 min TTL)
  * 3. Finding the matching public key
  * 4. Verifying the token signature
- * 5. Validating all claims (issuer, audience, expiration, scope, etc.)
+ * 5. Validating the payload shape (all required/typed fields present)
+ * 6. Validating all claims (issuer, audience, expiration, scope, etc.)
+ *
+ * Key-rotation resilience: if step 3 or 4 fails with a key-related error (e.g. Logto
+ * rotated its signing keys and the cached JWKS no longer contains the new `kid`), the
+ * cache entry is invalidated and a single retry is attempted with freshly fetched JWKS.
+ * Claims errors (wrong audience, expired token, etc.) are NOT retried.
  *
  * @param {string} token - The JWT token to verify (typically from Authorization header or cookie)
  * @param {VerifyAuthOptions} options - Verification options
@@ -252,6 +390,9 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
  */
 export async function verifyLogtoToken(token: string, options: VerifyAuthOptions): Promise<AuthContext> {
   const { logtoUrl } = options
+  // Derive the JWKS URL via the shared helper so this matches the cache key
+  // used by fetchJWKS — guarantees the delete() on retry hits the right entry.
+  const jwksUrl = `${buildOidcBaseUrl(logtoUrl)}/jwks`
 
   try {
     // Decode JWT header to get kid and alg
@@ -261,41 +402,30 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
     }
 
     const headerJson = base64UrlDecode(headerBase64)
-    const header = JSON.parse(headerJson)
+    const header = JSON.parse(headerJson) as Record<string, unknown>
 
-    // Fetch JWKS from Logto
+    // Fetch JWKS from Logto (uses in-memory cache when within 5-minute TTL)
     const keys = await fetchJWKS(logtoUrl)
 
-    // Find matching key
-    const jwk = findMatchingKey(keys, header.kid, header.alg)
+    try {
+      return await verifyWithKeys(token, header, keys, options)
+    } catch (verifyError) {
+      // Only retry for key-rotation errors (missing kid, signature mismatch).
+      // Claims errors (audience, issuer, expiry, scope) are not retried —
+      // they would produce the same failure after a fresh JWKS fetch.
+      if (!isKeyRotationError(verifyError)) {
+        throw verifyError
+      }
 
-    // Import the JWK for verification
-    const publicKey = await importJWK(jwk, header?.alg || 'RS256')
-
-    // Verify the JWT signature and get payload
-    const { payload } = (await jwtVerify(token, publicKey)) as { payload: AuthPayload }
-
-    // Manually verify all claims
-    verifyTokenClaims(payload, options)
-
-    return {
-      userId: payload.sub,
-      isAuthenticated: true,
-      payload,
-      isGuest: false,
+      // Invalidate the stale cache entry and fetch a fresh JWKS, then retry once.
+      console.warn('[verifyLogtoToken] Key/signature error — invalidating JWKS cache and retrying with fresh keys')
+      jwksCache.delete(jwksUrl)
+      const freshKeys = await fetchJWKS(logtoUrl)
+      return await verifyWithKeys(token, header, freshKeys, options)
     }
   } catch (error) {
     throw new Error(`Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
-}
-
-const generateUUID = () => {
-  // Generate a random UUID (v4)
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
 }
 
 /**
@@ -655,4 +785,96 @@ export async function verifyAuth(
 
     throw error
   }
+}
+
+/**
+ * Build a `Set-Cookie` header string that sets the auth token as an `HttpOnly` cookie.
+ *
+ * ## Why this exists — the XSS / non-httpOnly problem
+ *
+ * The client-side `jwtCookieUtils.saveToken()` sets the auth token from JavaScript.
+ * Because `HttpOnly` can only be set by the **server** (via a `Set-Cookie` response
+ * header), the client-set cookie is readable by any same-origin JavaScript, including
+ * scripts injected by an XSS attack.
+ *
+ * If your deployment includes a backend (Express, Next.js, etc.) that handles the
+ * post-authentication callback, you can upgrade security by having the server re-set
+ * the cookie with `HttpOnly`. The browser will then attach it to every request
+ * automatically and JavaScript can no longer read it.
+ *
+ * ## Recommended flow
+ *
+ * ```
+ * 1. Frontend CallbackPage exchanges the auth code via Logto SDK (as normal).
+ * 2. Frontend sends the obtained JWT to a backend endpoint, e.g. POST /api/session.
+ * 3. Backend verifies the JWT with verifyLogtoToken(), then calls buildAuthCookieHeader()
+ *    and sets it on the response.
+ * 4. The browser now holds an HttpOnly cookie — the frontend no longer needs to store
+ *    the JWT in its own document.cookie.
+ * ```
+ *
+ * @param {string} token - The verified JWT string to store in the cookie.
+ * @param {object} [options]
+ * @param {string} [options.cookieName='logto_authtoken'] - Cookie name. Must match the
+ *   `cookieName` used by the backend middleware so it finds the token on subsequent requests.
+ * @param {number} [options.maxAge=604800] - Cookie lifetime in **seconds** (default: 7 days).
+ * @param {string} [options.domain] - Cookie domain (omit to use the current host).
+ * @param {string} [options.path='/'] - Cookie path.
+ * @param {'Strict'|'Lax'|'None'} [options.sameSite='Strict'] - SameSite policy.
+ *   Use `'None'` only if you need the cookie on cross-site requests (requires `Secure`).
+ *
+ * @returns {string} A complete `Set-Cookie` header value ready to pass to `res.setHeader`.
+ *
+ * @example
+ * // Express — upgrade to HttpOnly after verifying the token
+ * import express from 'express';
+ * import { verifyLogtoToken, buildAuthCookieHeader } from '@ouim/simple-logto/backend';
+ *
+ * app.post('/api/session', async (req, res) => {
+ *   const token = req.body.token; // JWT sent from the frontend after Logto callback
+ *   const auth = await verifyLogtoToken(token, { logtoUrl: process.env.LOGTO_ENDPOINT });
+ *   const cookie = buildAuthCookieHeader(token);
+ *   res.setHeader('Set-Cookie', cookie);
+ *   res.json({ userId: auth.userId });
+ * });
+ *
+ * @example
+ * // Next.js Route Handler — same pattern
+ * import { verifyLogtoToken, buildAuthCookieHeader } from '@ouim/simple-logto/backend';
+ *
+ * export async function POST(request: Request) {
+ *   const { token } = await request.json();
+ *   const auth = await verifyLogtoToken(token, { logtoUrl: process.env.LOGTO_ENDPOINT });
+ *   const cookie = buildAuthCookieHeader(token);
+ *   return new Response(JSON.stringify({ userId: auth.userId }), {
+ *     headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookie },
+ *   });
+ * }
+ */
+export function buildAuthCookieHeader(
+  token: string,
+  options: {
+    cookieName?: string
+    maxAge?: number
+    domain?: string
+    path?: string
+    sameSite?: 'Strict' | 'Lax' | 'None'
+  } = {},
+): string {
+  const {
+    cookieName = 'logto_authtoken',
+    maxAge = 7 * 24 * 60 * 60, // 7 days in seconds
+    domain,
+    path = '/',
+    sameSite = 'Strict',
+  } = options
+
+  // JWTs use base64url encoding and contain only A-Za-z0-9-_.= characters,
+  // all of which are safe in cookie values. Do NOT encode the token here:
+  // extractTokenFromCookies reads through cookie-parser (or Next.js cookies
+  // API) which already decodes percent-encoded values. Encoding here would
+  // cause double-decoding and corrupt the token on the read path.
+  let header = `${cookieName}=${token}; Max-Age=${maxAge}; Path=${path}; HttpOnly; Secure; SameSite=${sameSite}`
+  if (domain) header += `; Domain=${domain}`
+  return header
 }

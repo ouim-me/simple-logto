@@ -323,7 +323,29 @@ export const cookieUtils = {
  */
 export const jwtCookieUtils = {
   /**
-   * Save JWT token to cookie
+   * Save JWT token to cookie.
+   *
+   * ⚠️  SECURITY NOTICE — XSS / non-httpOnly cookie
+   * ─────────────────────────────────────────────────────────────────────────
+   * This cookie is set from JavaScript, which means it cannot carry the
+   * `HttpOnly` flag. Any JavaScript that runs on the same origin — including
+   * injected scripts from an XSS vulnerability — can read the raw JWT value
+   * from `document.cookie` and exfiltrate it.
+   *
+   * The cookie is still protected by `Secure` (HTTPS-only) and
+   * `SameSite=Strict` (blocks cross-site request forgery), but those flags do
+   * NOT prevent access by same-origin JavaScript.
+   *
+   * MITIGATIONS:
+   *   1. Keep a strict Content-Security-Policy to reduce XSS attack surface.
+   *   2. If your deployment includes a Node.js backend that handles the
+   *      callback redirect, use `buildAuthCookieHeader()` from
+   *      `@ouim/simple-logto/backend` to set an `HttpOnly` version of the
+   *      same cookie from the server side. The browser will then send it
+   *      automatically and it will be invisible to JavaScript.
+   *
+   * See: https://owasp.org/www-community/HttpOnly
+   * ─────────────────────────────────────────────────────────────────────────
    */
   saveToken: (token: string) => {
     cookieUtils.setCookie('logto_authtoken', token, {
@@ -365,16 +387,26 @@ export const guestUtils = {
       return result.visitorId
     } catch (error) {
       console.warn('Failed to generate fingerprint, falling back to UUID:', error)
-      // Fallback to UUID generation
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      // crypto.randomUUID() — available in all modern browsers (Chrome 92+, Safari 15.4+,
+      // Firefox 95+) and Node 19+ as a global.
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID()
       }
-      // Fallback UUID generation for older browsers
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        const r = (Math.random() * 16) | 0
-        const v = c === 'x' ? r : (r & 0x3) | 0x8
-        return v.toString(16)
-      })
+      // crypto.getRandomValues fallback — available since IE11 and all modern browsers.
+      // Avoids Math.random() which is not cryptographically secure.
+      if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
+        // Set version 4 and variant bits per RFC 4122
+        bytes[6] = (bytes[6] & 0x0f) | 0x40
+        bytes[8] = (bytes[8] & 0x3f) | 0x80
+        return Array.from(bytes)
+          .map((b, i) => ([4, 6, 8, 10].includes(i) ? '-' : '') + b.toString(16).padStart(2, '0'))
+          .join('')
+      }
+      // No crypto API available — this path is unreachable in any browser built in
+      // the last decade, but included to satisfy TypeScript's exhaustiveness check.
+      throw new Error('No cryptographically secure random source available for guest ID generation')
     }
   },
 
@@ -382,29 +414,27 @@ export const guestUtils = {
    * Get guest ID from cookie
    */
   getGuestId(): string | null {
-    if (typeof document === 'undefined') return null
-
-    const cookies = document.cookie.split(';')
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=')
-      if (name === 'guest_logto_authtoken') {
-        return value
-      }
-    }
-    return null
+    return cookieUtils.getCookie('guest_logto_authtoken')
   },
 
   /**
    * Set guest ID cookie
+   *
+   * Uses cookieUtils.setCookie so that the same security flags applied to the
+   * auth token cookie (Secure, SameSite=strict) are also applied here, making
+   * both cookies consistent. The Secure flag is enforced regardless of the
+   * current protocol so that the guest ID is never sent over plain HTTP.
    */
   async setGuestId(guestId?: string): Promise<string> {
     if (typeof document === 'undefined') return guestId || ''
 
     const id = guestId || (await this.generateGuestId())
-    const expires = new Date()
-    expires.setDate(expires.getDate() + 7) // 7 days
-
-    document.cookie = `guest_logto_authtoken=${id}; expires=${expires.toUTCString()}; path=/; SameSite=Strict`
+    cookieUtils.setCookie('guest_logto_authtoken', id, {
+      expires: 7, // 7 days (matches jwtCookieUtils.saveToken)
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    })
     return id
   },
 
@@ -423,9 +453,7 @@ export const guestUtils = {
    * Clear guest ID cookie
    */
   clearGuestId(): void {
-    if (typeof document === 'undefined') return
-
-    document.cookie = 'guest_logto_authtoken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict'
+    cookieUtils.removeCookie('guest_logto_authtoken', { path: '/' })
   },
 }
 

@@ -421,9 +421,16 @@ const InternalAuthProvider = ({
         }, 1000)
         popupIntervalRef.current = checkClosed
 
-        // Listen for messages from the popup
+        // Listen for messages from the popup.
+        // Guard against two distinct spoofing vectors:
+        //   1. Cross-origin messages — rejected by the origin check.
+        //   2. Same-origin script spoofing — a script on the same origin could
+        //      dispatch a synthetic MessageEvent with `type: 'SIGNIN_SUCCESS'` and
+        //      pass the origin check. Adding `event.source === popup` ensures we
+        //      only accept the message from the exact popup window we opened.
         const handleMessage = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return
+          if (event.source !== popup) return
 
           if (event.data.type === 'SIGNIN_SUCCESS' || event.data.type === 'SIGNIN_COMPLETE') {
             // Cancel the 5-minute stale cleanup and remove all listeners immediately

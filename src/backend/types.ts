@@ -35,6 +35,13 @@ export interface ExpressRequest {
 export interface ExpressResponse {
   status: (code: number) => ExpressResponse
   json: (obj: unknown) => ExpressResponse
+  /**
+   * Set a response header. Present on all real Express `Response` objects
+   * (inherited from `http.ServerResponse`). Typed as optional here to keep
+   * the interface compatible with minimal test stubs, but the CSRF middleware
+   * depends on it being present to set the CSRF cookie.
+   */
+  setHeader?: (name: string, value: string) => void
 }
 
 export type ExpressNext = (err?: unknown) => void
