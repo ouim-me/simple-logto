@@ -44,12 +44,13 @@ function extractGuestTokenFromCookies(cookies: unknown, cookieName: string = 'gu
   if (isNextCookieStore(cookies)) {
     // Next.js cookies
     const cookie = cookies.get(cookieName)
-    return cookie?.value || generateUUID()
+    return cookie?.value ?? null
   } else if (isExpressCookieStore(cookies)) {
     // Express cookies
-    return cookies[cookieName] || generateUUID()
+    return cookies[cookieName] ?? null
   }
-  return generateUUID()
+  // No recognisable cookie store — caller decides what to do with null
+  return null
 }
 
 /**

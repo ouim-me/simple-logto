@@ -34,7 +34,8 @@
 - [X] **1.5 — Fix inconsistent issuer construction in `verifyTokenClaims`** The JWKS fetch uses string concatenation (`${normalizedLogtoUrl}/oidc/jwks`) while issuer verification uses `new URL('oidc', logtoUrl)`. These produce different results when `logtoUrl` has a path suffix. Unify both to use the same URL construction strategy.
   > Replaced `new URL('oidc', logtoUrl).toString()` with `\`${normalizedLogtoUrl}/oidc\`` in `verifyTokenClaims`, mirroring the same strip-trailing-slash + append pattern used by `fetchJWKS`. The `new URL` relative resolution would silently replace the last path segment when `logtoUrl` contained a path (e.g. `https://host/tenant` → `https://host/oidc` instead of `https://host/tenant/oidc`).
 
-- [ ] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
+- [X] **1.6 — Fix unstable guest ID on backend requests** `extractGuestTokenFromCookies` generates a new random UUID each time no guest cookie is present, making the guest identity non-persistent per request. This defeats the purpose of guest tracking. Return `null` (or a sentinel) when no cookie is found rather than generating a new ID.
+  > Replaced all three `generateUUID()` fallbacks in `extractGuestTokenFromCookies` with `null`. Guest identity is established on the frontend (which sets the persistent `guest_logto_authtoken` cookie); the backend should only read it. When no cookie exists `guestId` resolves to `undefined` in the auth context, which is the correct "no guest identity yet" signal to callers.
 
 ---
 
