@@ -25,7 +25,8 @@
 - [X] **1.2 — Fix stale package name in `bundler-config.ts`** `getBundlerConfig()` returns a Vite `optimizeDeps.include` array containing `@ouim/better-logto-react` (the old package name). Any consumer spreading this config into their Vite config adds a non-existent package to their build. Replace with the current package name `@ouim/simple-logto` or remove entirely.
   > Replaced `@ouim/better-logto-react` with `@ouim/simple-logto` in the `optimizeDeps.include` array inside the `vite` case of `getBundlerConfig()`. The stale name was the only occurrence in the file.
 
-- [ ] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+- [X] **1.3 — Fix React peer dependency range to include React 18** The `peerDependencies` range is `^17.0.0 || ^19.0.0`, skipping React 18. This produces npm warnings for the majority of current React users. Update to `^17.0.0 || ^18.0.0 || ^19.0.0`.
+  > Updated both `react` and `react-dom` peer dependency ranges to include `^18.0.0`. React 18 is currently the dominant version in use, so this was a significant gap causing spurious npm warnings on install.
 
 - [ ] **1.4 — Fix JWT audience array support (RFC 7519 compliance)** `verifyTokenClaims` compares `payload.aud !== audience` using strict equality. RFC 7519 allows `aud` to be a string array. If Logto issues a multi-audience token, legitimate users are rejected. Update the check to handle both `string` and `string[]` for `aud`.
 
