@@ -25,6 +25,8 @@ npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run
 ```
 Do not push if any step fails. Fix the failure first.
 
+> **Note:** CI uses `npm install` (not `npm ci`) because the lockfile is generated on Windows and only contains Windows-specific esbuild optional binaries. `npm install` respects the lockfile for pinned deps while resolving the correct platform binary on the Linux runner.
+
 ## Architecture
 
 This is a **single npm package** (`@ouim/simple-logto`) with three published entrypoints:

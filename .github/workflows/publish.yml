@@ -25,7 +25,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       # ── Full CI gate (same steps as ci.yml) ──────────────────────────────
       - name: Lint
