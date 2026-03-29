@@ -148,30 +148,39 @@
 **Priority: 🟡 Medium**
 
 - [x] **5.1 — Fix 12 broken `callback.test.tsx` tests** The `useHandleSignInCallback` mock is not working correctly, causing 12 test failures. Fix the mock setup so all callback flow scenarios are tested: success redirect, error with `onError`, popup success, popup failure.
+
   > All 23 tests in `callback.test.tsx` are already passing (verified with `npx vitest run`). The mock for `useHandleSignInCallback` was working correctly using a `useEffect` + `setTimeout(0)` pattern that lets the initial render complete before triggering the callback. No changes needed.
 
 - [x] **5.2 — Fix broken navigation test in `user-center.test.tsx`** The navigation assertion test is noted as broken. Fix the mock router setup and restore the test.
+
   > All 29 tests in `user-center.test.tsx` are already passing. The navigation test uses a `vi.mock('./utils', ...)` pattern that properly stubs `navigateTo`, so the broken state was already resolved before this session. No changes needed.
 
 - [x] **5.3 — Add tests for popup sign-in flow** Write tests in `context.test.tsx` for: popup window opens, `SIGNIN_SUCCESS` message triggers state update and cleanup, popup blocked by browser, popup times out (5-minute cleanup fires).
-  > Added a new `Popup Sign-in Flow` describe block (7 tests) to `context.test.tsx`. Tests cover: (1) popup opens with correct URL+features, (2) popup blocked returns early with console.warn, (3) SIGNIN_SUCCESS closes popup and clears listener, (4) SIGNIN_COMPLETE alias also accepted, (5) cross-origin messages rejected, (6) same-origin spoof (wrong source) rejected, (7) 5-minute auto-cleanup removes message listener. The source-check tests use a plain object (not a real `MessageEvent`) since the handler only reads `.origin`, `.source`, and `.data` — no real DOM event needed. The timeout test switches to `vi.useFakeTimers()` *after* the initial render/`waitFor` to avoid disrupting React's async effect scheduling.
+
+  > Added a new `Popup Sign-in Flow` describe block (7 tests) to `context.test.tsx`. Tests cover: (1) popup opens with correct URL+features, (2) popup blocked returns early with console.warn, (3) SIGNIN_SUCCESS closes popup and clears listener, (4) SIGNIN_COMPLETE alias also accepted, (5) cross-origin messages rejected, (6) same-origin spoof (wrong source) rejected, (7) 5-minute auto-cleanup removes message listener. The source-check tests use a plain object (not a real `MessageEvent`) since the handler only reads `.origin`, `.source`, and `.data` — no real DOM event needed. The timeout test switches to `vi.useFakeTimers()` _after_ the initial render/`waitFor` to avoid disrupting React's async effect scheduling.
 
 - [x] **5.4 — Add tests for `verifyTokenClaims` edge cases** In `verify-auth.test.ts`: add tests for `aud` as an array (both matching and non-matching), `aud` as `undefined`, `sub` as `undefined`, and expired tokens with clock skew.
+
   > Added two new outer `describe` blocks to `verify-auth.test.ts`: `verifyTokenClaims — audience array (RFC 7519)` (3 tests: aud-array match, aud-array mismatch, no audience option) and `validatePayloadShape — required field enforcement` (6 tests: missing sub, empty sub, missing iss, non-numeric exp, expired-at-boundary using `vi.useFakeTimers`, and non-string/array aud). Also fixed the root cause of pre-existing test instability: the outer `beforeEach` used `vi.clearAllMocks()` which does NOT flush `mockResolvedValueOnce` queues — replaced with `vi.resetAllMocks()` throughout the file.
 
 - [x] **5.5 — Add tests for JWKS cache invalidation** Replace the placeholder `expect(true).toBe(true)` cache test. Write tests verifying: cache hit within TTL, cache miss after TTL, cache invalidation on key rotation failure and retry.
+
   > Replaced the placeholder with three real cache tests inside the existing `JWKS Fetching` describe: (1) cache hit — second call within TTL doesn't call `fetch`; (2) cache miss after TTL — `vi.useFakeTimers()` advances clock 5 min+1s, verifying `fetch` is called twice; (3) key-rotation retry — first `jwtVerify` throws `ERR_JWS_SIGNATURE_VERIFICATION_FAILED`, cache is invalidated, `fetch` is called a second time, and the retry succeeds. Each test uses a unique `logtoUrl` to get a fresh cache entry.
 
 - [x] **5.6 — Add tests for `guestUtils` and `cookieUtils`** Write unit tests for `utils.ts` cookie helpers: set, get, delete, expiry, `Secure` flag in HTTPS context vs HTTP.
+
   > Created `src/utils.test.ts` (25 tests). Covers `cookieUtils` (set with encoding, get, overwrite, SSR guard, remove), `jwtCookieUtils` (saveToken/getToken/removeToken round-trip), and `guestUtils` (getGuestId, setGuestId with provided ID / fingerprint / UUID fallback, ensureGuestId, clearGuestId, generateGuestId happy path and fallback). FingerprintJS is mocked via `vi.mock()` factory; individual fallback paths are tested via `mockRejectedValueOnce`. Note: `Secure` flag enforcement is a browser-level restriction that happy-dom does not simulate, so that dimension is implicitly tested via the flag being present in the cookie string passed to `document.cookie`.
 
 - [x] **5.7 — Add tests for `bundler-config.ts` exports** Verify that `getViteConfig`, `getWebpackConfig`, and `getNextConfig` return the expected shape and do not include stale package names.
+
   > Created `src/bundler-config.test.ts` (17 tests). Verifies `getBundlerConfig('vite')` returns `optimizeDeps.include: ['@logto/react']` and `resolve.alias: { jose: 'jose/dist/node/cjs' }`, that webpack and nextjs configs have `resolve` but NOT `optimizeDeps`, that nextjs and webpack configs produce identical shapes, that no config contains the stale `@ouim/better-logto-react` name, and that the pre-built `viteConfig`/`webpackConfig`/`nextjsConfig` named exports equal their `getBundlerConfig()` counterparts.
 
 - [x] **5.8 — Add integration test for Express middleware** Write a test using `supertest` against a real Express app with the middleware mounted. Test: valid JWT, expired JWT, missing JWT, guest token, scope enforcement.
+
   > Added `src/backend/express.integration.test.ts` using a real Express app plus `supertest`. The suite mounts `createExpressAuthMiddleware()` and covers the requested end-to-end cases: valid auth cookie, expired token rejection, missing-token 401, guest-cookie fallback, and required-scope enforcement. Added `express`/`supertest` and their TypeScript types as devDependencies to support this integration-level coverage without changing the published package surface.
 
 - [x] **5.9 — Add integration test for Next.js route handler** Write a test using `next-test-api-route-handler` or equivalent for `verifyNextAuth`: valid JWT, guest flow, missing token, `allowGuest: false` with no token.
+
   > Added `src/backend/next-route.integration.test.ts` with a small route-handler harness around `verifyNextAuth()`. The test uses a real `Headers` object and a minimal request adapter rather than the full Next runtime, which avoids adding `next` as a dev dependency while still covering route-level behavior. It verifies the requested scenarios: authenticated JWT session, guest-cookie flow, missing-token 401, and explicit `allowGuest: false` with no token.
 
 - [x] **5.10 — Set minimum coverage thresholds in Vitest config** Add `coverage.thresholds` to `vitest.config.ts`: statements ≥ 80%, branches ≥ 75%. Fail CI if thresholds are not met.
@@ -186,21 +195,27 @@
 **Priority: 🟡 Medium**
 
 - [x] **6.1 — Change `useAuth` default redirect from `/404` to `/signin`** The default `redirectTo` value in `useAuth` is `/404`. This is a confusing default — unauthenticated users get a 404 page rather than a sign-in prompt. Change the default to `/signin` or make the default `undefined` and throw a helpful error if `requireAuth: true` is set without `redirectTo`.
+
   > Changed `redirectTo || '/404'` to `redirectTo || '/signin'` in the `middleware === 'auth'` branch of `useAuth`. Updated the JSDoc `@param` description to document the new default. Updated the corresponding test in `useAuth.test.tsx` that was asserting `/404` — it now asserts `/signin` and includes a comment explaining the semantic change. No other call sites reference this default.
 
 - [x] **6.2 — Add `redirectTo` prop to `CallbackPage`** As noted in Phase 2.4, the callback redirect is hard-coded to `/`. Expose a `redirectTo` prop (and respect `onSuccess` return values) for flexibility.
+
   > Already completed as part of task 2.4. `CallbackPage` now accepts `redirectTo?: string` (defaulting to `'/'`) and uses it in the redirect line. The `onSuccess` callback is `() => void` by design — returning a value from it to override the redirect destination would be a breaking signature change. The prop-based `redirectTo` covers the same flexibility requirement with a cleaner API.
 
 - [x] **6.3 — Add customization props to `SignInPage`** `SignInPage` has no props for loading state, error display, or layout. Add at minimum: `loadingComponent`, `errorComponent`, and `className` props.
+
   > Added a new public `SignInPageProps` type and wired `SignInPage` to accept `loadingComponent`, `errorComponent`, and `className`. The component now tracks sign-in bootstrap failures with local state instead of fire-and-forget `signIn(undefined, false)`, rendering either a caller-supplied error UI or a default `<div role="alert">` message. Added `src/signin.test.tsx` covering custom loading UI, default error UI, and functional custom error rendering.
 
 - [x] **6.4 — Fix module-level `customNavigateFunction` singleton** `utils.ts` stores the navigation function as a module-level variable. In micro-frontend or multi-instance test environments, mounting a second `AuthProvider` overwrites it for all instances. Move this to React context so each `AuthProvider` has its own navigation scope.
+
   > Added `src/navigation.tsx` with a provider-scoped navigation context and switched `AuthProvider` to wrap its tree with `NavigationProvider` instead of mutating a module singleton. `useAuth` and `UserCenter` now resolve navigation from the nearest provider, while `utils.navigateTo` remains as the browser fallback. Added coverage proving nested `AuthProvider` instances keep independent `customNavigate` handlers, which closes the cross-instance override bug in micro-frontend and multi-provider test setups.
 
 - [x] **6.5 — Export all TypeScript types from the package root** Review all types in `types.ts`, `backend/types.ts`, and inline interfaces. Ensure every public type is re-exported from the package entry points so consumers can use them without reaching into internal paths.
+
   > Root `src/index.ts` now re-exports the previously missing frontend public types: `AuthContextType`, `AuthProviderProps`, and `SignInPageProps`. Also removed the duplicate inline `CallbackPageProps` declaration from `callback.tsx` so the shared `src/types.ts` definition is the single source of truth. The backend entrypoint already re-exported `src/backend/types.ts`; README examples were updated to show the full supported type import surface from both `@ouim/simple-logto` and `@ouim/simple-logto/backend`.
 
 - [x] **6.6 — Add `audience` as an array type in `VerifyAuthOptions`** `audience` is typed as `string` but multi-API setups require multiple audiences. Change type to `string | string[]` and update `verifyTokenClaims` accordingly.
+
   > Updated `VerifyAuthOptions.audience` to `string | string[]` and changed `verifyTokenClaims()` to treat both the expected audiences and token `aud` claim as arrays, succeeding on any intersection. Added tests covering matching and non-matching option-side audience arrays, and updated the backend docs/README examples to document the expanded type.
 
 - [x] **6.7 — Make `AuthProvider` warn in development when required config is missing** Add runtime `console.warn` in development mode when `appId`, `endpoint`, or `resources` are missing/empty, pointing to the documentation. Helps catch misconfiguration early.
@@ -215,9 +230,11 @@
 **Priority: 🟡 Medium**
 
 - [x] **7.1 — Add `CONTRIBUTING.md`** Cover: local dev setup, running tests, PR process, commit message conventions, and how to publish a release.
+
   > `CONTRIBUTING.md` was already present and fully covered the requested scope before this session. Verified here that it includes local setup, test commands, PR workflow, commit conventions, branch-protection notes, and release publishing steps, so the task list was updated to match repository state.
 
 - [x] **7.2 — Add troubleshooting guide to README** Common issues from `todo.md`: CORS errors, JWKS fetch failures, "Invalid audience", popup blocked, infinite redirect loop. Each should have a cause and fix.
+
   > Added a dedicated `## Troubleshooting` section to `README.md` covering all requested issues. Each entry now has an explicit cause/fix breakdown focused on the actual integration points in this package: CORS + credentials for backend cookie flows, JWKS endpoint reachability and cache refresh behavior, audience/resource mismatches, popup browser restrictions plus the `/signin` dependency, and common redirect-loop misconfiguration traps around `/callback`, `callbackUrl`, route protection, and custom navigation.
 
 - [x] **7.3 — Document the implicit `/signin` route requirement for popup flow** The popup flow requires a `/signin` route to exist. This is not mentioned in the README. Add a note in the Popup Sign-In section explaining this dependency.

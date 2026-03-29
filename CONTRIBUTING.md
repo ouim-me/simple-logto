@@ -24,7 +24,7 @@ Thank you for your interest in contributing! This document covers everything you
 git clone https://github.com/ouim-me/simple-logto.git
 cd simple-logto
 
-# 2. Install dependencies (also installs husky git hooks via the prepare script)
+# 2. Install dependencies
 npm install
 
 # 3. Watch TypeScript for errors during development
@@ -55,7 +55,7 @@ All tests must pass and the build must succeed before a PR can be merged.
 
 ## Commit Message Conventions
 
-This project follows **[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)**.
+Conventional Commits are recommended for consistency, especially if you plan to automate changelog or release workflows later.
 
 ```
 <type>(<scope>): <short description>
@@ -78,11 +78,11 @@ This project follows **[Conventional Commits](https://www.conventionalcommits.or
 | `ci` | CI/CD workflow changes |
 | `perf` | Performance improvements |
 
-**Scopes** (optional, but recommended) — see `commitlint.config.js` for the full enforced list. Common ones: `auth`, `backend`, `csrf`, `ui`, `types`, `deps`, `ci`, `release`, `docs`, `config`, `hooks`, `utils`, `context`, `callback`, `user-center`.
+**Scopes** (optional, but recommended) — common ones: `auth`, `backend`, `csrf`, `ui`, `types`, `deps`, `ci`, `release`, `docs`, `config`, `hooks`, `utils`, `context`, `callback`, `user-center`.
 
 **Breaking changes:** append `!` after the type/scope, e.g. `feat(backend)!: change verifyAuth signature`, and add a `BREAKING CHANGE:` footer.
 
-`commitlint` + `husky` hooks enforce this format automatically. The `commit-msg` hook runs `commitlint` on every commit. Hooks are installed automatically by `npm install` via the `prepare` script — no manual setup needed.
+There is no local Git hook enforcement in this repository.
 
 ---
 
