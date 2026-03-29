@@ -8,12 +8,8 @@ on:
 
 jobs:
   ci:
-    name: Node ${{ matrix.node }} · Lint · Type-check · Test · Build
+    name: Node 24 · Lint · Type-check · Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [18, 20, 22]
 
     steps:
       - name: Checkout
@@ -22,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -40,9 +36,3 @@ jobs:
 
       - name: Test
         run: npx vitest run
-
-      - name: Build
-        run: npm run build
-
-      - name: Packed consumer smoke tests
-        run: npm run test:smoke

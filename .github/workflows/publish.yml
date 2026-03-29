@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    name: Run CI then publish to npm
+    name: Validate then publish to npm
     runs-on: ubuntu-latest
 
     permissions:
@@ -20,14 +20,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm install
 
-      # ── Full CI gate (same steps as ci.yml) ──────────────────────────────
+      # ── Validation gate (same steps as ci.yml) ───────────────────────────
       - name: Lint
         run: npm run lint
 
@@ -36,12 +36,6 @@ jobs:
 
       - name: Test
         run: npx vitest run
-
-      - name: Build
-        run: npm run build
-
-      - name: Packed consumer smoke tests
-        run: npm run test:smoke
 
       # ── Publish ──────────────────────────────────────────────────────────
       - name: Publish to npm

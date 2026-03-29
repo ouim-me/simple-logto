@@ -63,13 +63,13 @@ Peer dependencies:
 
 ## Runtime Support
 
-The package is currently tested and supported on:
+The package currently declares compatibility with:
 
-- Node.js `18.18+`, `20.x`, and `22.x`
+- Node.js `18.18+`, `20.x`, `22.x`, and `24.x`
 - React `17.x`, `18.x`, and `19.x`
 - `@logto/react` `3.x` and `4.x`
 
-The published `engines` field enforces the supported Node.js policy for package consumers and contributors. CI is kept on the same Node.js support matrix so the documented policy matches the environments that are actually verified.
+GitHub Actions runs the default validation gate on Node `24`, which is the current Active LTS line as of March 29, 2026. The published `engines` field expresses the broader compatibility policy, while CI stays intentionally lighter for day-to-day pull requests.
 
 ## Quick Start
 
