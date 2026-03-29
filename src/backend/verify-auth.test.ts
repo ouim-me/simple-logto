@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { verifyLogtoToken } from './verify-auth'
+import { clearJwksCache, invalidateJwksCache, verifyLogtoToken } from './verify-auth'
 import type { VerifyAuthOptions } from './types'
 
 // Mock jose library
@@ -21,6 +21,7 @@ describe('JWT Verification Logic', () => {
     // resetAllMocks() clears both call history AND the mockResolvedValueOnce queue.
     // clearAllMocks() only clears call history — stale queued values bleed across tests.
     vi.resetAllMocks()
+    clearJwksCache()
   })
 
   describe('Token Format Validation', () => {
@@ -195,6 +196,107 @@ describe('JWT Verification Logic', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2)
       expect(result.isAuthenticated).toBe(true)
       expect(result.userId).toBe('user-123')
+    })
+
+    it('should honor a custom JWKS cache TTL', async () => {
+      vi.useFakeTimers()
+      try {
+        const cacheUrl = 'https://cache-custom-ttl-test.logto.app'
+        const cacheOptions: VerifyAuthOptions = {
+          logtoUrl: cacheUrl,
+          audience: 'urn:logto:resource:api',
+          jwksCacheTtlMs: 1000,
+        }
+        const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+        const mockJwks = {
+          ok: true,
+          json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'n', e: 'AQAB' }] }),
+        }
+        const makePayload = () => ({
+          sub: 'user-custom-ttl',
+          iss: `${cacheUrl}/oidc`,
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        })
+
+        const { jwtVerify } = await import('jose')
+
+        ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+        ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+        await verifyLogtoToken(mockToken, cacheOptions)
+
+        vi.advanceTimersByTime(1500)
+
+        ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+        ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+        await verifyLogtoToken(mockToken, cacheOptions)
+
+        expect(global.fetch).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('should bypass the JWKS cache when skipJwksCache is true', async () => {
+      const cacheUrl = 'https://cache-skip-test.logto.app'
+      const cacheOptions: VerifyAuthOptions = {
+        logtoUrl: cacheUrl,
+        audience: 'urn:logto:resource:api',
+        skipJwksCache: true,
+      }
+      const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+      const mockJwks = {
+        ok: true,
+        json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'n', e: 'AQAB' }] }),
+      }
+      const makePayload = () => ({
+        sub: 'user-skip-cache',
+        iss: `${cacheUrl}/oidc`,
+        aud: 'urn:logto:resource:api',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      const { jwtVerify } = await import('jose')
+
+      ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+      ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+      await verifyLogtoToken(mockToken, cacheOptions)
+
+      ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+      ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+      await verifyLogtoToken(mockToken, cacheOptions)
+
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('should let callers explicitly invalidate a tenant JWKS cache entry', async () => {
+      const cacheUrl = 'https://cache-explicit-invalidate-test.logto.app'
+      const cacheOptions: VerifyAuthOptions = { logtoUrl: cacheUrl, audience: 'urn:logto:resource:api' }
+      const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+      const mockJwks = {
+        ok: true,
+        json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'n', e: 'AQAB' }] }),
+      }
+      const makePayload = () => ({
+        sub: 'user-explicit-invalidate',
+        iss: `${cacheUrl}/oidc`,
+        aud: 'urn:logto:resource:api',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      const { jwtVerify } = await import('jose')
+
+      ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+      ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+      await verifyLogtoToken(mockToken, cacheOptions)
+
+      invalidateJwksCache(cacheUrl)
+
+      ;(global.fetch as any).mockResolvedValueOnce(mockJwks)
+      ;(jwtVerify as any).mockResolvedValueOnce({ payload: makePayload() })
+      await verifyLogtoToken(mockToken, cacheOptions)
+
+      expect(global.fetch).toHaveBeenCalledTimes(2)
     })
   })
 

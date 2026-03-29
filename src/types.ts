@@ -32,12 +32,37 @@ export interface AuthContextType {
   enablePopupSignIn?: boolean
 }
 
+export type AuthSignOutReason = 'user' | 'auth_error' | 'missing_access_token' | 'transient_error_limit'
+
+export interface AuthTokenRefreshEvent {
+  user: LogtoUser
+  accessToken: string
+  expiresAt?: number
+  previousExpiresAt?: number
+}
+
+export interface AuthErrorEvent {
+  error: Error
+  isTransient: boolean
+  willSignOut: boolean
+}
+
+export interface AuthSignOutEvent {
+  reason: AuthSignOutReason
+  global: boolean
+  callbackUrl?: string
+  error?: Error
+}
+
 export interface AuthProviderProps {
   children: React.ReactNode
   config: LogtoConfig
   callbackUrl?: string
   customNavigate?: (url: string, options?: NavigationOptions) => void
   enablePopupSignIn?: boolean
+  onTokenRefresh?: (event: AuthTokenRefreshEvent) => void
+  onAuthError?: (event: AuthErrorEvent) => void
+  onSignOut?: (event: AuthSignOutEvent) => void
 }
 
 export interface CallbackPageProps {

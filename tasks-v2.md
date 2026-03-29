@@ -307,9 +307,11 @@
 
 **Priority: 🟡 Medium**
 
-- [ ] **9.1 — Make JWKS cache configurable** The current module-level in-memory cache is reasonable for many apps, but not ideal everywhere.
+- [x] **9.1 — Make JWKS cache configurable** The current module-level in-memory cache is reasonable for many apps, but not ideal everywhere.
 
   > Start with TTL configurability and explicit cache controls. Only add a pluggable cache adapter if a concrete use case justifies the extra API surface. The first step should be small and testable, not a Redis abstraction by default.
+  >
+  > Added two small, explicit cache controls to `VerifyAuthOptions`: `jwksCacheTtlMs` to override the default 5 minute per-process JWKS TTL and `skipJwksCache` to bypass the cache for a given verifier/middleware instance. Also exported `invalidateJwksCache(logtoUrl)` and `clearJwksCache()` from the backend entrypoint so operators and tests can force a refresh without restarting the process. Added focused verifier tests for custom TTL expiry, cache bypass, and explicit invalidation, and documented the new controls in both backend docs surfaces.
 
 - [x] **9.2 — Review and remove unnecessary reload behavior in `SignInPage`** Forced reloads should be eliminated or documented as an explicit contract.
 
@@ -317,9 +319,11 @@
   >
   > Removed the `window.location.reload()` branch from `SignInPage` when an already-authenticated user lands on `/`. The reload was unnecessary because auth state synchronization already happens in `AuthProvider` / `useAuth`; the page only needs to redirect to `/` when it is reached from another route. Added a regression test covering the authenticated-at-root case to ensure the component now stays put without a hard refresh.
 
-- [ ] **9.3 — Add lifecycle callbacks to `AuthProvider`** Hooks for important auth transitions would improve integration with host apps.
+- [x] **9.3 — Add lifecycle callbacks to `AuthProvider`** Hooks for important auth transitions would improve integration with host apps.
 
   > Add well-scoped callbacks such as `onTokenRefresh`, `onAuthError`, and `onSignOut`, with clear guarantees around when they fire and what data they receive. Avoid a generic event bus.
+  >
+  > Added `onTokenRefresh`, `onAuthError`, and `onSignOut` to `AuthProviderProps` with explicit event payload types in `src/types.ts` instead of a generic emitter. `onTokenRefresh` only fires when an already-loaded authenticated session receives a different access token; `onAuthError` reports both transient and definitive auth failures with a `willSignOut` flag; and `onSignOut` fires immediately before the provider initiates local or global sign-out, including the reason (`user`, `auth_error`, `missing_access_token`, `transient_error_limit`). Added focused context tests for refresh and sign-out/error flows and documented the callbacks in the public README.
 
 - [ ] **9.4 — Improve SSR/client boundary documentation and helpers** The package uses client-only guards in several places; consumers need clearer guidance.
 

@@ -209,4 +209,43 @@ describe('verifyNextAuth route handler integration', () => {
       error: 'No token found in cookies or Authorization header',
     })
   })
+
+  it('honors jwksCacheTtlMs through verifyNextAuth route handling', async () => {
+    const logtoUrl = 'https://test.logto.app/next-custom-ttl'
+    vi.useFakeTimers()
+    try {
+      vi.mocked(jwtVerify).mockResolvedValue({
+        payload: buildPayload(logtoUrl),
+        protectedHeader: {},
+      } as never)
+
+      await routeHandler(
+        createRouteRequest({
+          cookie: `logto_authtoken=${validToken}`,
+        }),
+        {
+          logtoUrl,
+          audience: 'urn:logto:resource:api',
+          jwksCacheTtlMs: 1,
+        },
+      )
+
+      vi.advanceTimersByTime(5)
+
+      await routeHandler(
+        createRouteRequest({
+          cookie: `logto_authtoken=${validToken}`,
+        }),
+        {
+          logtoUrl,
+          audience: 'urn:logto:resource:api',
+          jwksCacheTtlMs: 1,
+        },
+      )
+
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

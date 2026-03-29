@@ -188,4 +188,28 @@ describe('createExpressAuthMiddleware integration', () => {
     })
     expect(response.body.message).toContain('Missing required scope: write:user')
   })
+
+  it('honors skipJwksCache through the Express middleware wrapper', async () => {
+    const logtoUrl = 'https://test.logto.app/express-skip-cache'
+    vi.mocked(jwtVerify).mockResolvedValue({
+      payload: buildPayload(logtoUrl),
+      protectedHeader: {},
+    } as never)
+
+    const app = buildApp({
+      logtoUrl,
+      audience: 'urn:logto:resource:api',
+      skipJwksCache: true,
+    })
+
+    await request(app)
+      .get('/session')
+      .set('Cookie', [`logto_authtoken=${validToken}`])
+
+    await request(app)
+      .get('/session')
+      .set('Cookie', [`logto_authtoken=${validToken}`])
+
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
 })

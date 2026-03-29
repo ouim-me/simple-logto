@@ -515,6 +515,159 @@ describe('Proactive Token Refresh', () => {
 
     expect(getAccessToken).toHaveBeenCalledTimes(2)
   }, 10000)
+
+  it('calls onTokenRefresh when a scheduled refresh replaces the access token', async () => {
+    const initialAccessTokenExp = Math.floor(Date.now() / 1000) + 61
+    const refreshedAccessTokenExp = Math.floor(Date.now() / 1000) + 300
+    const onTokenRefresh = vi.fn()
+    const getIdTokenClaims = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      })
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      })
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce(createMockJwt(initialAccessTokenExp))
+      .mockResolvedValueOnce(createMockJwt(refreshedAccessTokenExp))
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig} onTokenRefresh={onTokenRefresh}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+    await waitFor(() => expect(onTokenRefresh).toHaveBeenCalledTimes(1), { timeout: 3000 })
+
+    expect(onTokenRefresh).toHaveBeenCalledWith({
+      user: {
+        id: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      },
+      accessToken: createMockJwt(refreshedAccessTokenExp),
+      expiresAt: refreshedAccessTokenExp,
+      previousExpiresAt: initialAccessTokenExp,
+    })
+  }, 10000)
+})
+
+describe('AuthProvider Lifecycle Callbacks', () => {
+  const AuthControls = () => {
+    const { signOut } = useAuthContext()
+    return <button onClick={() => signOut({ callbackUrl: '/signed-out', global: false })}>Sign Out</button>
+  }
+
+  it('calls onAuthError before a forced logout caused by an auth failure', async () => {
+    const onAuthError = vi.fn()
+    const onSignOut = vi.fn()
+    const initialExp = Math.floor(Date.now() / 1000) + 61
+    const getIdTokenClaims = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      })
+      .mockRejectedValueOnce(new Error('invalid_grant'))
+    const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp))
+    const signOut = vi.fn()
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+        signOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig} onAuthError={onAuthError} onSignOut={onSignOut}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(onAuthError).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1), { timeout: 3000 })
+
+    expect(onAuthError).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: 'invalid_grant' }),
+      isTransient: false,
+      willSignOut: true,
+    })
+    expect(onSignOut).toHaveBeenCalledWith({
+      reason: 'auth_error',
+      global: true,
+      callbackUrl: undefined,
+      error: expect.objectContaining({ message: 'invalid_grant' }),
+    })
+  }, 10000)
+
+  it('calls onSignOut for an explicit user sign-out with the selected scope', async () => {
+    const onSignOut = vi.fn()
+    const logtoSignOut = vi.fn()
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        signOut: logtoSignOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig} onSignOut={onSignOut}>
+        <AuthControls />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Sign Out')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Sign Out'))
+
+    await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1))
+    expect(onSignOut).toHaveBeenCalledWith({
+      reason: 'user',
+      global: false,
+      callbackUrl: '/signed-out',
+    })
+    expect(logtoSignOut).not.toHaveBeenCalled()
+  })
+
+  it('swallows errors thrown by consumer lifecycle callbacks without breaking sign-out', async () => {
+    const onSignOut = vi.fn(() => {
+      throw new Error('consumer callback failure')
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={mockConfig} onSignOut={onSignOut}>
+        <AuthControls />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Sign Out')).toBeInTheDocument())
+    expect(() => fireEvent.click(screen.getByText('Sign Out'))).not.toThrow()
+
+    await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1))
+    expect(errorSpy).toHaveBeenCalledWith('Error in AuthProvider onSignOut callback:', expect.any(Error))
+
+    errorSpy.mockRestore()
+  })
 })
 
 // ---------------------------------------------------------------------------

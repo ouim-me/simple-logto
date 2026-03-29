@@ -145,6 +145,30 @@ The verification helpers will look for the JWT token in the following order:
 - `audience`: Your API resource identifier or allowed identifiers (required for protected resource APIs, accepts `string | string[]`)
 - `cookieName`: Custom cookie name (optional, defaults to 'logto_authtoken')
 - `requiredScope`: Required scope for access (optional)
+- `jwksCacheTtlMs`: Override the per-process JWKS cache TTL in milliseconds (optional, defaults to 5 minutes)
+- `skipJwksCache`: Force a fresh JWKS fetch for this verification call instead of reading/writing the in-memory cache (optional)
+
+## JWKS Cache Controls
+
+The backend verifier keeps a per-process in-memory JWKS cache by default. That is usually the right tradeoff, but you can now control it explicitly when needed:
+
+- Pass `jwksCacheTtlMs` to shorten or extend the cache lifetime for a specific verifier/middleware instance.
+- Pass `skipJwksCache: true` to force a fresh JWKS fetch for a specific verification call.
+- Call `invalidateJwksCache(logtoUrl)` to drop one tenant's cached JWKS entry.
+- Call `clearJwksCache()` to flush the entire in-memory JWKS cache for the current process.
+
+```ts
+import { clearJwksCache, invalidateJwksCache, verifyAuth } from '@ouim/simple-logto/backend'
+
+const auth = await verifyAuth(token, {
+  logtoUrl: 'https://your-logto-domain.com',
+  audience: 'your-api-resource-identifier',
+  jwksCacheTtlMs: 60_000,
+})
+
+invalidateJwksCache('https://your-logto-domain.com')
+clearJwksCache()
+```
 
 ## Auth Context
 

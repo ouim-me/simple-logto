@@ -23,6 +23,8 @@ export interface VerifyAuthOptions {
   cookieName?: string
   requiredScope?: string
   allowGuest?: boolean
+  jwksCacheTtlMs?: number
+  skipJwksCache?: boolean
 }
 
 // Express middleware types

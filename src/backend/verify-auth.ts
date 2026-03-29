@@ -35,7 +35,7 @@ function isHeaderMap(headers: unknown): headers is HeaderMap {
 
 // Cache for JWKs to avoid fetching on every request
 const jwksCache = new Map<string, { keys: JwkKey[]; expires: number }>()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const DEFAULT_JWKS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Normalize a Logto base URL to its OIDC base path.
@@ -125,13 +125,14 @@ function base64UrlDecode(str: string): string {
 /**
  * Fetch JWKS from Logto server with caching
  */
-async function fetchJWKS(logtoUrl: string): Promise<JwkKey[]> {
-  const jwksUrl = `${buildOidcBaseUrl(logtoUrl)}/jwks`
+async function fetchJWKS(options: Pick<VerifyAuthOptions, 'logtoUrl' | 'jwksCacheTtlMs' | 'skipJwksCache'>): Promise<JwkKey[]> {
+  const { logtoUrl, jwksCacheTtlMs = DEFAULT_JWKS_CACHE_TTL_MS, skipJwksCache = false } = options
+  const jwksUrl = getJwksUrl(logtoUrl)
   const now = Date.now()
 
   // Check cache first
   const cached = jwksCache.get(jwksUrl)
-  if (cached && cached.expires > now) {
+  if (!skipJwksCache && cached && cached.expires > now) {
     return cached.keys
   }
 
@@ -144,16 +145,45 @@ async function fetchJWKS(logtoUrl: string): Promise<JwkKey[]> {
     const jwks = await response.json()
     const keys = jwks.keys || []
 
-    // Cache the keys
-    jwksCache.set(jwksUrl, {
-      keys,
-      expires: now + CACHE_DURATION,
-    })
+    if (!skipJwksCache && jwksCacheTtlMs > 0) {
+      jwksCache.set(jwksUrl, {
+        keys,
+        expires: now + jwksCacheTtlMs,
+      })
+    } else {
+      jwksCache.delete(jwksUrl)
+    }
 
     return keys
   } catch (error) {
     throw new Error(`Failed to fetch JWKS from ${jwksUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+}
+
+function getJwksUrl(logtoUrl: string): string {
+  return `${buildOidcBaseUrl(logtoUrl)}/jwks`
+}
+
+/**
+ * Remove the cached JWKS entry for a specific Logto tenant.
+ *
+ * Useful after rotating signing keys, changing proxy/network configuration,
+ * or when an operator wants the next verification to force a fresh JWKS fetch.
+ *
+ * @param {string} logtoUrl - Logto server URL whose JWKS cache entry should be removed.
+ */
+export function invalidateJwksCache(logtoUrl: string): void {
+  jwksCache.delete(getJwksUrl(logtoUrl))
+}
+
+/**
+ * Clear all cached JWKS entries held in this process.
+ *
+ * Useful in tests, long-lived worker processes, or admin/debug flows where
+ * you want the next verification for every tenant to fetch fresh keys.
+ */
+export function clearJwksCache(): void {
+  jwksCache.clear()
 }
 
 /**
@@ -358,7 +388,7 @@ async function verifyWithKeys(
  *
  * Verifies a Logto JWT token by:
  * 1. Decoding the JWT header to extract key ID (kid) and algorithm
- * 2. Fetching the JWKS (JSON Web Key Set) from Logto's OIDC endpoint (cached, 5 min TTL)
+ * 2. Fetching the JWKS (JSON Web Key Set) from Logto's OIDC endpoint (cached, default 5 min TTL)
  * 3. Finding the matching public key
  * 4. Verifying the token signature
  * 5. Validating the payload shape (all required/typed fields present)
@@ -376,6 +406,8 @@ async function verifyWithKeys(
  * @param {string} [options.requiredScope] - Required scope that must be present in token
  * @param {string} [options.cookieName] - Cookie name for token storage (default: 'logto_authtoken')
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
+ * @param {number} [options.jwksCacheTtlMs=300000] - How long to cache fetched JWKS keys in memory per process
+ * @param {boolean} [options.skipJwksCache=false] - When true, bypass the in-memory JWKS cache for this verification call
  *
  * @returns {Promise<AuthContext>} Authentication context with user ID, authentication status, and token payload
  *
@@ -396,7 +428,7 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
   const { logtoUrl } = options
   // Derive the JWKS URL via the shared helper so this matches the cache key
   // used by fetchJWKS — guarantees the delete() on retry hits the right entry.
-  const jwksUrl = `${buildOidcBaseUrl(logtoUrl)}/jwks`
+  const jwksUrl = getJwksUrl(logtoUrl)
 
   try {
     // Decode JWT header to get kid and alg
@@ -409,7 +441,7 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
     const header = JSON.parse(headerJson) as Record<string, unknown>
 
     // Fetch JWKS from Logto (uses in-memory cache when within 5-minute TTL)
-    const keys = await fetchJWKS(logtoUrl)
+    const keys = await fetchJWKS(options)
 
     try {
       return await verifyWithKeys(token, header, keys, options)
@@ -424,7 +456,7 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
       // Invalidate the stale cache entry and fetch a fresh JWKS, then retry once.
       console.warn('[verifyLogtoToken] Key/signature error — invalidating JWKS cache and retrying with fresh keys')
       jwksCache.delete(jwksUrl)
-      const freshKeys = await fetchJWKS(logtoUrl)
+      const freshKeys = await fetchJWKS(options)
       return await verifyWithKeys(token, header, freshKeys, options)
     }
   } catch (error) {

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
 import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils.js'
 import { NavigationProvider } from './navigation.js'
-import type { AuthContextType, AuthProviderProps, LogtoUser } from './types.js'
+import type { AuthContextType, AuthErrorEvent, AuthProviderProps, AuthSignOutEvent, AuthSignOutReason, AuthTokenRefreshEvent, LogtoUser } from './types.js'
 
 const POPUP_AUTH_EVENT_DELAY = 500
 const TOKEN_REFRESH_BUFFER_MS = 60_000
@@ -43,6 +43,8 @@ const getJwtExpiration = (token: string): number | undefined => {
     return undefined
   }
 }
+
+const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)))
 
 // Create auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -112,11 +114,17 @@ const InternalAuthProvider = ({
   callbackUrl,
   enablePopupSignIn,
   logtoConfig,
+  onTokenRefresh,
+  onAuthError,
+  onSignOut,
 }: {
   children: React.ReactNode
   callbackUrl?: string
   enablePopupSignIn?: boolean
   logtoConfig: LogtoConfig // Logto configuration object
+  onTokenRefresh?: (event: AuthTokenRefreshEvent) => void
+  onAuthError?: (event: AuthErrorEvent) => void
+  onSignOut?: (event: AuthSignOutEvent) => void
 }) => {
   const { isAuthenticated, isLoading, getIdTokenClaims, getAccessToken, signIn: logtoSignIn, signOut: logtoSignOut } = useLogto()
   const [user, setUser] = useState<LogtoUser | null>(null)
@@ -147,6 +155,14 @@ const InternalAuthProvider = ({
   const popupIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>()
   /** Tracks the 5-minute popup auto-cleanup timer so it can be cleared on provider unmount. */
   const popupCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>()
+  /** Tracks the last access token so refresh callbacks only fire for real token transitions. */
+  const lastAccessTokenRef = useRef<string | undefined>()
+  /** Tracks the last access token expiry used in refresh callback payloads. */
+  const lastAccessTokenExpRef = useRef<number | undefined>()
+  /** Latest lifecycle callbacks without forcing auth logic to re-subscribe on every render. */
+  const onTokenRefreshRef = useRef(onTokenRefresh)
+  const onAuthErrorRef = useRef(onAuthError)
+  const onSignOutRef = useRef(onSignOut)
   const MAX_ERROR_COUNT = 3
   /**
    * Maximum consecutive transient errors before giving up and signing the user out.
@@ -155,6 +171,60 @@ const InternalAuthProvider = ({
    */
   const MAX_TRANSIENT_ERRORS = 5
   const MIN_LOAD_INTERVAL = 1000 // 1 second between calls
+
+  useEffect(() => {
+    onTokenRefreshRef.current = onTokenRefresh
+  }, [onTokenRefresh])
+
+  useEffect(() => {
+    onAuthErrorRef.current = onAuthError
+  }, [onAuthError])
+
+  useEffect(() => {
+    onSignOutRef.current = onSignOut
+  }, [onSignOut])
+
+  const emitAuthError = useCallback((event: AuthErrorEvent) => {
+    try {
+      onAuthErrorRef.current?.(event)
+    } catch (callbackError) {
+      console.error('Error in AuthProvider onAuthError callback:', callbackError)
+    }
+  }, [])
+
+  const emitSignOut = useCallback((event: AuthSignOutEvent) => {
+    try {
+      onSignOutRef.current?.(event)
+    } catch (callbackError) {
+      console.error('Error in AuthProvider onSignOut callback:', callbackError)
+    }
+  }, [])
+
+  const emitTokenRefresh = useCallback((event: AuthTokenRefreshEvent) => {
+    try {
+      onTokenRefreshRef.current?.(event)
+    } catch (callbackError) {
+      console.error('Error in AuthProvider onTokenRefresh callback:', callbackError)
+    }
+  }, [])
+
+  const clearTrackedAccessToken = useCallback(() => {
+    lastAccessTokenRef.current = undefined
+    lastAccessTokenExpRef.current = undefined
+  }, [])
+
+  const performGlobalSignOut = useCallback(
+    async (reason: AuthSignOutReason, error?: Error, nextCallbackUrl?: string) => {
+      emitSignOut({
+        reason,
+        global: true,
+        callbackUrl: nextCallbackUrl,
+        error,
+      })
+      await logtoSignOut(nextCallbackUrl)
+    },
+    [emitSignOut, logtoSignOut],
+  )
 
   const clearRefreshTimer = useCallback(() => {
     clearTimeout(refreshTimerRef.current)
@@ -226,27 +296,48 @@ const InternalAuthProvider = ({
           const jwt = await getAccessToken(defaultResource)
 
           if (jwt) {
+            const nextUser = transformUser(claims)
             // Only set user as logged in if we actually have a valid access token
             const tokenExp = getJwtExpiration(jwt)
+            const previousToken = lastAccessTokenRef.current
+            const previousExpiresAt = lastAccessTokenExpRef.current
             jwtCookieUtils.saveToken(jwt)
-            setUser(transformUser(claims))
+            setUser(nextUser)
             // Reset all error counters and any pending backoff on a successful fetch
             errorCount.current = 0
             transientErrorCount.current = 0
             clearTimeout(backoffTimerRef.current)
+            lastAccessTokenRef.current = jwt
+            lastAccessTokenExpRef.current = tokenExp
+            if (previousToken !== undefined && previousToken !== jwt && nextUser) {
+              emitTokenRefresh({
+                user: nextUser,
+                accessToken: jwt,
+                expiresAt: tokenExp,
+                previousExpiresAt,
+              })
+            }
             scheduleTokenRefresh(tokenExp)
           } else {
             // Refresh token expired (e.g. user was gone > 30 days) — session is dead.
             // The Logto SDK still reports isAuthenticated=true because it reads stale
             // localStorage, but we have no usable token, so we must log out cleanly.
-            console.warn('Access token unavailable — session likely expired. Forcing logout.')
+            const authError = new Error('Access token unavailable — session likely expired. Forcing logout.')
+            console.warn(authError.message)
+            emitAuthError({
+              error: authError,
+              isTransient: false,
+              willSignOut: true,
+            })
             setUser(null)
             jwtCookieUtils.removeToken()
             resetRefreshSchedule()
-            await logtoSignOut()
+            clearTrackedAccessToken()
+            await performGlobalSignOut('missing_access_token', authError)
           }
         } catch (error: unknown) {
           console.error('Error fetching user claims:', error)
+          const normalizedError = toError(error)
 
           // ─── Classify the error ──────────────────────────────────────────────
           //
@@ -256,7 +347,7 @@ const InternalAuthProvider = ({
           //
           // Auth errors (invalid/expired tokens, revoked grants) indicate the
           // session is genuinely broken and we must sign the user out.
-          const errorMessage = error instanceof Error ? error.message.toLowerCase() : ''
+          const errorMessage = normalizedError.message.toLowerCase()
           const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as { code: unknown }).code : undefined
 
           // Auth errors are evaluated FIRST because they must take priority:
@@ -291,6 +382,12 @@ const InternalAuthProvider = ({
           // ─── Transient error path ────────────────────────────────────────────
           if (isTransientError) {
             transientErrorCount.current += 1
+            const willSignOut = transientErrorCount.current > MAX_TRANSIENT_ERRORS
+            emitAuthError({
+              error: normalizedError,
+              isTransient: true,
+              willSignOut,
+            })
             // Preserve the current user state — the user is likely still authenticated.
             // Schedule an exponential-backoff retry (capped at 32 s) so that a
             // temporary outage self-heals without manual intervention.
@@ -317,8 +414,9 @@ const InternalAuthProvider = ({
               jwtCookieUtils.removeToken()
               transientErrorCount.current = 0
               resetRefreshSchedule()
+              clearTrackedAccessToken()
               try {
-                await logtoSignOut()
+                await performGlobalSignOut('transient_error_limit', normalizedError)
               } catch (logoutError) {
                 console.error('Error during forced logout after transient retry exhaustion:', logoutError)
                 if (typeof window !== 'undefined') {
@@ -337,11 +435,17 @@ const InternalAuthProvider = ({
             transientErrorCount.current = 0
 
             const shouldSignOut = isDefiniteAuthError || errorCount.current >= MAX_ERROR_COUNT
+            emitAuthError({
+              error: normalizedError,
+              isTransient: false,
+              willSignOut: shouldSignOut,
+            })
 
             if (shouldSignOut) {
-              console.warn('Authentication error detected, forcing logout:', error instanceof Error ? error.message : error)
+              console.warn('Authentication error detected, forcing logout:', normalizedError.message)
+              clearTrackedAccessToken()
               try {
-                await logtoSignOut()
+                await performGlobalSignOut('auth_error', normalizedError)
               } catch (logoutError) {
                 console.error('Error during forced logout:', logoutError)
                 if (typeof window !== 'undefined') {
@@ -356,6 +460,7 @@ const InternalAuthProvider = ({
         setUser(null)
         // Remove token cookie when not authenticated
         jwtCookieUtils.removeToken()
+        clearTrackedAccessToken()
         // Reset all error counts when transitioning to unauthenticated state
         errorCount.current = 0
         transientErrorCount.current = 0
@@ -365,7 +470,7 @@ const InternalAuthProvider = ({
 
       setIsLoadingUser(false)
     },
-    [defaultResource, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, logtoSignOut, resetRefreshSchedule, scheduleTokenRefresh],
+    [clearTrackedAccessToken, defaultResource, emitAuthError, emitTokenRefresh, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, performGlobalSignOut, resetRefreshSchedule, scheduleTokenRefresh],
   )
 
   useEffect(() => {
@@ -580,6 +685,12 @@ const InternalAuthProvider = ({
       // Always remove the JWT token cookie on sign out
       jwtCookieUtils.removeToken()
       resetRefreshSchedule()
+      clearTrackedAccessToken()
+      emitSignOut({
+        reason: 'user',
+        global,
+        callbackUrl,
+      })
 
       if (global) {
         // Global sign out - logs out from entire Logto ecosystem
@@ -601,7 +712,7 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [logtoSignOut, resetRefreshSchedule],
+    [clearTrackedAccessToken, emitSignOut, logtoSignOut, resetRefreshSchedule],
   )
 
   const value: AuthContextType = useMemo(
@@ -631,6 +742,9 @@ const InternalAuthProvider = ({
  * @param {string} [callbackUrl] - Default URL to redirect to after authentication (e.g., '/dashboard'). Can be overridden per sign-in call
  * @param {Function} [customNavigate] - Custom navigation function for client-side routing (e.g., from React Router or Next.js). If not provided, uses window.location
  * @param {boolean} [enablePopupSignIn=false] - Enable popup-based sign-in flow (opens sign-in in a new window). Defaults to redirect flow
+ * @param {(event: AuthTokenRefreshEvent) => void} [onTokenRefresh] - Called when an existing authenticated session receives a different access token
+ * @param {(event: AuthErrorEvent) => void} [onAuthError] - Called when auth loading hits a transient or definitive auth error
+ * @param {(event: AuthSignOutEvent) => void} [onSignOut] - Called immediately before the provider initiates local or global sign-out
  *
  * @example
  * // Basic setup with Logto configuration
@@ -659,7 +773,16 @@ const InternalAuthProvider = ({
  * @throws {Error} If required Logto configuration is missing or invalid (endpoint, appId)
  */
 // External provider that wraps Logto's provider
-export const AuthProvider = ({ children, config, callbackUrl, customNavigate, enablePopupSignIn = false }: AuthProviderProps) => {
+export const AuthProvider = ({
+  children,
+  config,
+  callbackUrl,
+  customNavigate,
+  enablePopupSignIn = false,
+  onTokenRefresh,
+  onAuthError,
+  onSignOut,
+}: AuthProviderProps) => {
   // Validate configuration on mount; also emit developer-friendly warnings in non-production
   // builds so misconfiguration is caught early with actionable messages and doc links.
   useEffect(() => {
@@ -696,7 +819,14 @@ export const AuthProvider = ({ children, config, callbackUrl, customNavigate, en
     <ClientOnly>
       <LogtoProvider config={config}>
         <NavigationProvider customNavigate={customNavigate}>
-          <InternalAuthProvider logtoConfig={config} callbackUrl={callbackUrl} enablePopupSignIn={enablePopupSignIn}>
+          <InternalAuthProvider
+            logtoConfig={config}
+            callbackUrl={callbackUrl}
+            enablePopupSignIn={enablePopupSignIn}
+            onTokenRefresh={onTokenRefresh}
+            onAuthError={onAuthError}
+            onSignOut={onSignOut}
+          >
             {children}
           </InternalAuthProvider>
         </NavigationProvider>
