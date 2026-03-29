@@ -214,22 +214,26 @@
 
 **Priority: 🟡 Medium**
 
-- [ ] **7.1 — Add `CONTRIBUTING.md`** Cover: local dev setup, running tests, PR process, commit message conventions, and how to publish a release.
+- [x] **7.1 — Add `CONTRIBUTING.md`** Cover: local dev setup, running tests, PR process, commit message conventions, and how to publish a release.
+  > `CONTRIBUTING.md` was already present and fully covered the requested scope before this session. Verified here that it includes local setup, test commands, PR workflow, commit conventions, branch-protection notes, and release publishing steps, so the task list was updated to match repository state.
 
-- [ ] **7.2 — Add troubleshooting guide to README** Common issues from `todo.md`: CORS errors, JWKS fetch failures, "Invalid audience", popup blocked, infinite redirect loop. Each should have a cause and fix.
+- [x] **7.2 — Add troubleshooting guide to README** Common issues from `todo.md`: CORS errors, JWKS fetch failures, "Invalid audience", popup blocked, infinite redirect loop. Each should have a cause and fix.
+  > Added a dedicated `## Troubleshooting` section to `README.md` covering all requested issues. Each entry now has an explicit cause/fix breakdown focused on the actual integration points in this package: CORS + credentials for backend cookie flows, JWKS endpoint reachability and cache refresh behavior, audience/resource mismatches, popup browser restrictions plus the `/signin` dependency, and common redirect-loop misconfiguration traps around `/callback`, `callbackUrl`, route protection, and custom navigation.
 
 - [x] **7.3 — Document the implicit `/signin` route requirement for popup flow** The popup flow requires a `/signin` route to exist. This is not mentioned in the README. Add a note in the Popup Sign-In section explaining this dependency.
   > Added an explicit note to the `SignInPage` section in `README.md`: popup sign-in still needs a real `/signin` route that renders `SignInPage`, because the popup window navigates there before it starts the Logto flow. This makes the routing dependency visible where consumers configure sign-in UI.
 
 <!-- SKIP this- [ ] **7.4 — Add migration guide for breaking changes** Create `MIGRATION.md` with a section for each minor version bump that introduced breaking changes. Start with the rename from `@ouim/better-logto-react` to `@ouim/simple-logto`. -->
 
-- [ ] **7.5 — Add `CODE_OF_CONDUCT.md`** Add the Contributor Covenant or equivalent CoC file as expected by GitHub's community standards checker.
+- [x] **7.5 — Add `CODE_OF_CONDUCT.md`** Add the Contributor Covenant or equivalent CoC file as expected by GitHub's community standards checker.
+  > Added a repository-root `CODE_OF_CONDUCT.md` with an equivalent project policy covering expected behavior, unacceptable conduct, scope, enforcement, and private reporting guidance. Kept it concise and GitHub-community-standards-friendly without introducing extra maintenance burden or project-specific process overhead.
 
 <!-- Skip this- [ ] **7.6 — Add security policy (`SECURITY.md`)** Document how to responsibly report security vulnerabilities (e.g., private GitHub security advisory), the disclosure timeline, and the supported versions. -->
 
 <!-- - [ ] **7.7 — Update `copilot-instructions.md` with accurate test and architecture info** Replace stale content with current architecture overview, test patterns, and how to run/add tests. -->
 
-- [ ] **7.8 — Add JSDoc examples for all backend exports** `verifyAuth`, `expressAuthMiddleware`, `verifyNextAuth`, `nextAuthMiddleware` all have JSDoc but lack `@example` blocks. Add minimal, copy-pasteable examples for each.
+- [x] **7.8 — Add JSDoc examples for all backend exports** `verifyAuth`, `expressAuthMiddleware`, `verifyNextAuth`, `nextAuthMiddleware` all have JSDoc but lack `@example` blocks. Add minimal, copy-pasteable examples for each.
+  > Verified that the current backend API surface already had example blocks on the main auth helpers (`verifyLogtoToken`, `createExpressAuthMiddleware`, `verifyNextAuth`, `verifyAuth`, `buildAuthCookieHeader`, `createCsrfMiddleware`, `verifyCsrfToken`). Filled the remaining gap by adding `@example` blocks to the exported CSRF helpers `generateCsrfToken()` and `buildCsrfCookieHeader()`. The task wording is slightly stale: there is no `nextAuthMiddleware` export in the current package, and the Express helper is named `createExpressAuthMiddleware`.
 
 ---
 
