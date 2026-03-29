@@ -22,6 +22,17 @@ npm install @ouim/simple-logto
 
 ## Usage
 
+## SSR And Runtime Boundary
+
+Use the backend subpath anywhere you need request-time authorization in SSR frameworks. This module is safe for Node.js server contexts and should be the source of truth for access control in:
+
+- Next.js route handlers
+- Next.js middleware
+- server-rendered loaders/actions
+- Express or custom Node servers
+
+Do not try to infer authoritative server auth state from the frontend package during SSR. The frontend entrypoint is browser-first and hydrates auth state on the client; the backend verifier should own request authentication on the server.
+
 ### Express.js Middleware
 
 `createExpressAuthMiddleware` automatically parses cookies for you so there's no need to install or `app.use` a separate `cookie-parser` middleware. Just import and mount the helper as shown below.
@@ -103,6 +114,10 @@ export const config = {
   matcher: '/api/protected/:path*',
 }
 ```
+
+### Pairing Next.js server checks with client auth UI
+
+Use `@ouim/simple-logto` only in client components such as `app/signin/page.tsx`, `app/callback/page.tsx`, or a client-side providers wrapper. Use `@ouim/simple-logto/backend` in route handlers and middleware. That split avoids hydration confusion and keeps browser-only logic out of the server bundle.
 
 ### Generic Usage
 

@@ -325,9 +325,11 @@
   >
   > Added `onTokenRefresh`, `onAuthError`, and `onSignOut` to `AuthProviderProps` with explicit event payload types in `src/types.ts` instead of a generic emitter. `onTokenRefresh` only fires when an already-loaded authenticated session receives a different access token; `onAuthError` reports both transient and definitive auth failures with a `willSignOut` flag; and `onSignOut` fires immediately before the provider initiates local or global sign-out, including the reason (`user`, `auth_error`, `missing_access_token`, `transient_error_limit`). Added focused context tests for refresh and sign-out/error flows and documented the callbacks in the public README.
 
-- [ ] **9.4 — Improve SSR/client boundary documentation and helpers** The package uses client-only guards in several places; consumers need clearer guidance.
+- [x] **9.4 — Improve SSR/client boundary documentation and helpers** The package uses client-only guards in several places; consumers need clearer guidance.
 
   > Document supported SSR patterns, hydration expectations, and router integration examples for React Router and Next.js. Add small helper docs or examples before adding more runtime abstraction.
+  >
+  > Added an explicit `SSR And Router Boundaries` section to the main `README.md` describing the client-only surface (`AuthProvider`, `useAuth`, `SignInPage`, `CallbackPage`, `UserCenter`), hydration expectations, and the rule that backend authorization must come from `@ouim/simple-logto/backend` during SSR. Also added concrete React Router and Next.js App Router examples, plus matching backend-side guidance in `src/backend/README.md` so the frontend/server split is documented in both docs entrypoints.
 
 - [ ] **9.5 — Add bundle-size monitoring in CI** This package ships UI and auth helpers; size regressions should be visible.
 
