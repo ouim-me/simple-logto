@@ -359,6 +359,10 @@
 
   > Consider a narrow `usePermission` hook only after the exact token/claim source is clear and stable in the frontend auth state.
 
+- [ ] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
+
+  > Add minimal fixture coverage for the documented React Router and/or Next.js SSR integration patterns so the examples are validated by CI instead of relying only on README maintenance.
+
 ---
 
 ## Phase 11 — Ecosystem & Community Polish
