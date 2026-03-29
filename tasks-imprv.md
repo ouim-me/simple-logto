@@ -186,7 +186,8 @@
 - [x] **6.1 — Change `useAuth` default redirect from `/404` to `/signin`** The default `redirectTo` value in `useAuth` is `/404`. This is a confusing default — unauthenticated users get a 404 page rather than a sign-in prompt. Change the default to `/signin` or make the default `undefined` and throw a helpful error if `requireAuth: true` is set without `redirectTo`.
   > Changed `redirectTo || '/404'` to `redirectTo || '/signin'` in the `middleware === 'auth'` branch of `useAuth`. Updated the JSDoc `@param` description to document the new default. Updated the corresponding test in `useAuth.test.tsx` that was asserting `/404` — it now asserts `/signin` and includes a comment explaining the semantic change. No other call sites reference this default.
 
-- [ ] **6.2 — Add `redirectTo` prop to `CallbackPage`** As noted in Phase 2.4, the callback redirect is hard-coded to `/`. Expose a `redirectTo` prop (and respect `onSuccess` return values) for flexibility.
+- [x] **6.2 — Add `redirectTo` prop to `CallbackPage`** As noted in Phase 2.4, the callback redirect is hard-coded to `/`. Expose a `redirectTo` prop (and respect `onSuccess` return values) for flexibility.
+  > Already completed as part of task 2.4. `CallbackPage` now accepts `redirectTo?: string` (defaulting to `'/'`) and uses it in the redirect line. The `onSuccess` callback is `() => void` by design — returning a value from it to override the redirect destination would be a breaking signature change. The prop-based `redirectTo` covers the same flexibility requirement with a cleaner API.
 
 - [ ] **6.3 — Add customization props to `SignInPage`** `SignInPage` has no props for loading state, error display, or layout. Add at minimum: `loadingComponent`, `errorComponent`, and `className` props.
 
@@ -196,7 +197,8 @@
 
 - [ ] **6.6 — Add `audience` as an array type in `VerifyAuthOptions`** `audience` is typed as `string` but multi-API setups require multiple audiences. Change type to `string | string[]` and update `verifyTokenClaims` accordingly.
 
-- [ ] **6.7 — Make `AuthProvider` warn in development when required config is missing** Add runtime `console.warn` in development mode when `appId`, `endpoint`, or `resources` are missing/empty, pointing to the documentation. Helps catch misconfiguration early.
+- [x] **6.7 — Make `AuthProvider` warn in development when required config is missing** Add runtime `console.warn` in development mode when `appId`, `endpoint`, or `resources` are missing/empty, pointing to the documentation. Helps catch misconfiguration early.
+  > Added a `process.env.NODE_ENV !== 'production'` guarded block at the top of the `validateLogtoConfig` `useEffect` in `AuthProvider`. Emits three distinct `[simple-logto]`-prefixed warnings: one for missing/empty `appId`, one for missing/empty `endpoint`, and one for an empty `resources` array — each with a brief explanation and a link to the relevant Logto docs page. The existing `validateLogtoConfig()` call still runs immediately after and throws for truly invalid configs. Added 4 tests in `context.test.tsx` (`Development Config Warnings` describe block) covering all three warning cases plus the negative case (no resources-warning when resources are present).
 
 ---
 

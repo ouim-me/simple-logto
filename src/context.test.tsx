@@ -183,6 +183,82 @@ describe('AuthProvider Context', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Development-mode config warnings (task 6.7)
+// ---------------------------------------------------------------------------
+
+describe('Development Config Warnings', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.clearAllMocks()
+  })
+
+  it('warns about missing appId in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: '' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('appId'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('warns about missing endpoint in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: '', appId: 'test-app' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('endpoint'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('warns about missing resources in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: 'test-app' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('resources'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('does not warn about missing resources when resources are provided', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: 'test-app', resources: ['https://api.example.com'] }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => screen.getByText('test'))
+
+    const resourceWarnCalls = warnSpy.mock.calls.filter(([msg]) => typeof msg === 'string' && msg.includes('resources'))
+    expect(resourceWarnCalls).toHaveLength(0)
+    warnSpy.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Popup Sign-in Flow (task 5.3)
 // ---------------------------------------------------------------------------
 
