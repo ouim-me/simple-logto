@@ -84,7 +84,7 @@ describe('useAuth Hook', () => {
   })
 
   describe('Auth middleware (require authentication)', () => {
-    it('should redirect to /404 when user not authenticated and middleware=auth', async () => {
+    it('should redirect to /signin when user not authenticated and middleware=auth (no redirectTo)', async () => {
       const { navigateTo } = await import('./utils')
       const mockAuth = {
         user: null,
@@ -104,7 +104,8 @@ describe('useAuth Hook', () => {
       render(<TestComponent />)
 
       await waitFor(() => {
-        expect(navigateTo).toHaveBeenCalledWith('/404', undefined)
+        // Default fallback is '/signin' (not '/404') so unauthenticated users land at the sign-in page
+        expect(navigateTo).toHaveBeenCalledWith('/signin', undefined)
       })
     })
 

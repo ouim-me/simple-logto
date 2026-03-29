@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { ReactNode } from 'react'
 import { AuthProvider } from './context'
 import { useAuthContext } from './context'
@@ -179,5 +179,304 @@ describe('AuthProvider Context', () => {
     await waitFor(() => {
       expect(screen.getByText('Test')).toBeInTheDocument()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Development-mode config warnings (task 6.7)
+// ---------------------------------------------------------------------------
+
+describe('Development Config Warnings', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.clearAllMocks()
+  })
+
+  it('warns about missing appId in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: '' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('appId'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('warns about missing endpoint in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: '', appId: 'test-app' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('endpoint'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('warns about missing resources in non-production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: 'test-app' }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('resources'))
+    })
+    warnSpy.mockRestore()
+  })
+
+  it('does not warn about missing resources when resources are provided', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={{ endpoint: 'https://test.logto.app', appId: 'test-app', resources: ['https://api.example.com'] }}>
+        <div>test</div>
+      </AuthProvider>,
+    )
+
+    await waitFor(() => screen.getByText('test'))
+
+    const resourceWarnCalls = warnSpy.mock.calls.filter(([msg]) => typeof msg === 'string' && msg.includes('resources'))
+    expect(resourceWarnCalls).toHaveLength(0)
+    warnSpy.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Popup Sign-in Flow (task 5.3)
+// ---------------------------------------------------------------------------
+
+describe('Popup Sign-in Flow', () => {
+  /** Minimal popup handle returned by window.open mock. */
+  let mockPopup: { closed: boolean; close: ReturnType<typeof vi.fn> }
+
+  /**
+   * Helper component that triggers signIn with usePopup=true so we can
+   * exercise the popup branch without depending on enablePopupSignIn default.
+   */
+  const PopupTrigger = () => {
+    const { signIn } = useAuthContext()
+    return <button onClick={() => signIn(undefined, true)}>Open Popup</button>
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mockPopup = { closed: false, close: vi.fn() }
+    // Replace window.open with a mock that returns our popup handle
+    Object.defineProperty(window, 'open', {
+      value: vi.fn().mockReturnValue(mockPopup),
+      writable: true,
+      configurable: true,
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // ── 1. Popup opens with correct parameters ──────────────────────────────
+
+  it('opens the popup with /signin?popup=true, the correct window name, and 500×770 features', async () => {
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    expect(window.open).toHaveBeenCalledWith('/signin?popup=true', 'SignInPopup', expect.stringContaining('width=500'))
+    expect(window.open).toHaveBeenCalledWith('/signin?popup=true', 'SignInPopup', expect.stringContaining('height=770'))
+  })
+
+  // ── 2. Popup blocked by the browser ─────────────────────────────────────
+
+  it('warns and returns early (no crash, no interval) when the popup is blocked', async () => {
+    // Browser blocked the popup — window.open returns null
+    // eslint-disable-next-line @typescript-eslint/no-extra-semi
+    (window.open as ReturnType<typeof vi.fn>).mockReturnValue(null)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+
+    // Should not throw
+    expect(() => fireEvent.click(screen.getByText('Open Popup'))).not.toThrow()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('blocked'))
+
+    warnSpy.mockRestore()
+  })
+
+  // ── 3. SIGNIN_SUCCESS closes popup and clears message listener ───────────
+
+  it('closes the popup and clears the message listener when SIGNIN_SUCCESS is received', async () => {
+    // Spy on addEventListener to capture the 'message' handler
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+
+    // Record how many message listeners exist before the click
+    const beforeCount = addELSpy.mock.calls.filter(([t]) => t === 'message').length
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    // Locate the handler registered by the popup sign-in flow
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    expect(msgCalls.length).toBeGreaterThan(beforeCount)
+
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    // Deliver a SIGNIN_SUCCESS message that appears to originate from the popup.
+    // We pass a plain object because the handler only reads .origin, .source, and .data —
+    // it does not require a real MessageEvent instance.
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: mockPopup, // matches the popup handle returned by window.open
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+    })
+
+    expect(mockPopup.close).toHaveBeenCalledOnce()
+  })
+
+  // ── 4. SIGNIN_COMPLETE (alias) also accepted ─────────────────────────────
+
+  it('also accepts SIGNIN_COMPLETE (the SignInPage variant) as a success signal', async () => {
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: mockPopup,
+        data: { type: 'SIGNIN_COMPLETE' },
+      })
+    })
+
+    expect(mockPopup.close).toHaveBeenCalledOnce()
+  })
+
+  // ── 5. Cross-origin messages are ignored ─────────────────────────────────
+
+  it('ignores messages from a different origin (prevents cross-origin spoofing)', async () => {
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    // Send message from a DIFFERENT origin
+    await act(async () => {
+      messageHandler({
+        origin: 'https://evil.example.com',
+        source: mockPopup,
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+    })
+
+    // popup.close must NOT have been called — the message was rejected
+    expect(mockPopup.close).not.toHaveBeenCalled()
+  })
+
+  // ── 6. Same-origin spoof (wrong source) is ignored ───────────────────────
+
+  it('ignores same-origin messages that do not come from the popup window', async () => {
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    // Correct origin, but source is a DIFFERENT object (same-origin spoof)
+    const otherWindow = { closed: false, close: vi.fn() }
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: otherWindow, // NOT the popup we opened
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+    })
+
+    expect(mockPopup.close).not.toHaveBeenCalled()
+  })
+
+  // ── 7. 5-minute auto-cleanup ─────────────────────────────────────────────
+
+  it('removes the message listener after the 5-minute auto-cleanup timeout', async () => {
+    render(
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupTrigger />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+
+    // Switch to fake timers AFTER initial render/effects so waitFor above works normally
+    vi.useFakeTimers()
+
+    const removeELSpy = vi.spyOn(window, 'removeEventListener')
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    // Advance past the 300,000 ms (5-minute) cleanup timeout
+    await act(async () => {
+      vi.advanceTimersByTime(300_001)
+    })
+
+    expect(removeELSpy).toHaveBeenCalledWith('message', expect.any(Function))
   })
 })

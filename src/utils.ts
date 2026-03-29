@@ -15,7 +15,9 @@ import type { LogtoConfig } from '@logto/react'
  *   console.error('Invalid Logto config:', error.message);
  * }
  */
-export const validateLogtoConfig = (config: LogtoConfig): void => {
+export const validateLogtoConfig = (config: LogtoConfig, options: { warnOnMissingResources?: boolean } = {}): void => {
+  const { warnOnMissingResources = true } = options
+
   if (!config) {
     throw new Error('Logto configuration is required. Please provide a valid LogtoConfig object to AuthProvider.')
   }
@@ -45,7 +47,7 @@ export const validateLogtoConfig = (config: LogtoConfig): void => {
 
   // Optional: Check for resources (audience) - log warning if not present
   // This is optional because some apps might not need it
-  if (!config.resources || config.resources.length === 0) {
+  if (warnOnMissingResources && (!config.resources || config.resources.length === 0)) {
     console.warn(
       'Warning: No `resources` configured in Logto config. ' +
         'If you need to access protected backend APIs with JWTs, ensure at least one resource is configured. ' +

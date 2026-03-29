@@ -16,7 +16,7 @@ import type { AuthOptions, AuthContextType } from './types'
  *   - `'auth'` - Protect route - redirects unauthenticated users to `redirectTo` URL
  *   - `'guest'` - Guest-only route - redirects authenticated users to `redirectIfAuthenticated` URL
  *   - `undefined` - No protection
- * @param {string} [options.redirectTo] - URL to redirect to when middleware='auth' and user is not authenticated (default: '/404')
+ * @param {string} [options.redirectTo] - URL to redirect to when middleware='auth' and user is not authenticated (default: '/signin')
  * @param {string} [options.redirectIfAuthenticated] - URL to redirect to when middleware='guest' and user is authenticated
  * @param {NavigationOptions} [options.navigationOptions] - Navigation behavior options
  *
@@ -79,7 +79,7 @@ export const useAuth = (options?: AuthOptions): AuthContextType => {
 
     if (middleware === 'auth' && !user) {
       // User is not authenticated but the route requires authentication
-      navigateTo(redirectTo || '/404', navigationOptions)
+      navigateTo(redirectTo || '/signin', navigationOptions)
     } else if (middleware === 'guest' && user && redirectIfAuthenticated) {
       // User is authenticated but the route is for guests only
       navigateTo(redirectIfAuthenticated, navigationOptions)

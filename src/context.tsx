@@ -559,9 +559,36 @@ const InternalAuthProvider = ({
  */
 // External provider that wraps Logto's provider
 export const AuthProvider = ({ children, config, callbackUrl, customNavigate, enablePopupSignIn = false }: AuthProviderProps) => {
-  // Validate configuration on mount
+  // Validate configuration on mount; also emit developer-friendly warnings in non-production
+  // builds so misconfiguration is caught early with actionable messages and doc links.
   useEffect(() => {
-    validateLogtoConfig(config)
+    // Guard `process` access so browser builds without a Node-style global do not throw.
+    // In most bundlers this still gets inlined at build time when available.
+    const env = typeof process !== 'undefined' ? process.env?.NODE_ENV : undefined
+    if (env !== 'production') {
+      if (!config?.appId) {
+        console.warn(
+          '[simple-logto] AuthProvider: `appId` is missing or empty.\n' +
+            'Every Logto application needs an App ID from the Logto Console.\n' +
+            'Docs: https://docs.logto.io/quick-starts',
+        )
+      }
+      if (!config?.endpoint) {
+        console.warn(
+          '[simple-logto] AuthProvider: `endpoint` (your Logto tenant URL) is missing or empty.\n' +
+            'Example: "https://your-tenant.logto.app"\n' +
+            'Docs: https://docs.logto.io/quick-starts',
+        )
+      }
+      if (!config?.resources?.length) {
+        console.warn(
+          '[simple-logto] AuthProvider: No `resources` (API identifiers) are configured.\n' +
+            'Backend JWT verification requires at least one API resource.\n' +
+            'Docs: https://docs.logto.io/docs/recipes/configure-jwt-token',
+        )
+      }
+    }
+    validateLogtoConfig(config, { warnOnMissingResources: false })
   }, [config])
 
   // Set the custom navigate function for the entire library
