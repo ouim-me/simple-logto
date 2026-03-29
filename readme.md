@@ -61,6 +61,16 @@ Peer dependencies:
 - `react-dom`
 - `@logto/react`
 
+## Runtime Support
+
+The package is currently tested and supported on:
+
+- Node.js `18.18+`, `20.x`, and `22.x`
+- React `17.x`, `18.x`, and `19.x`
+- `@logto/react` `3.x` and `4.x`
+
+The published `engines` field enforces the supported Node.js policy for package consumers and contributors. CI is kept on the same Node.js support matrix so the documented policy matches the environments that are actually verified.
+
 ## Quick Start
 
 ### 1. Wrap your app
