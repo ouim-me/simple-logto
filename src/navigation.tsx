@@ -1,5 +1,5 @@
 'use client'
-import React, { createContext, useContext, useMemo } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import { navigateTo as fallbackNavigateTo } from './utils'
 import type { NavigationOptions } from './types'
 
@@ -13,7 +13,21 @@ interface NavigationProviderProps {
 }
 
 export const NavigationProvider = ({ children, customNavigate }: NavigationProviderProps) => {
-  const navigate = useMemo<NavigateFunction>(() => customNavigate ?? fallbackNavigateTo, [customNavigate])
+  const customNavigateRef = useRef<NavigateFunction | undefined>(customNavigate)
+
+  useEffect(() => {
+    customNavigateRef.current = customNavigate
+  }, [customNavigate])
+
+  const navigate = useCallback<NavigateFunction>((url, options) => {
+    const navigateFn = customNavigateRef.current
+    if (navigateFn) {
+      navigateFn(url, options)
+      return
+    }
+
+    fallbackNavigateTo(url, options)
+  }, [])
 
   return <NavigationContext.Provider value={navigate}>{children}</NavigationContext.Provider>
 }

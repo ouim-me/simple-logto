@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { ReactNode } from 'react'
 import { AuthProvider } from './context'
 import { useAuthContext } from './context'
+import { useAuth } from './useAuth'
 import { useNavigation } from './navigation'
 import type { LogtoConfig } from '@logto/react'
 
@@ -151,7 +152,7 @@ describe('AuthProvider Context', () => {
     })
 
     fireEvent.click(screen.getByText('Navigate'))
-    expect(customNavigate).toHaveBeenCalledWith('/settings')
+    expect(customNavigate).toHaveBeenCalledWith('/settings', undefined)
   })
 
   it('should return context data with correct initial state', async () => {
@@ -216,10 +217,37 @@ describe('AuthProvider Context', () => {
     fireEvent.click(screen.getByText('Outer'))
     fireEvent.click(screen.getByText('Inner'))
 
-    expect(outerNavigate).toHaveBeenCalledWith('/outer')
-    expect(innerNavigate).toHaveBeenCalledWith('/inner')
+    expect(outerNavigate).toHaveBeenCalledWith('/outer', undefined)
+    expect(innerNavigate).toHaveBeenCalledWith('/inner', undefined)
     expect(outerNavigate).toHaveBeenCalledTimes(1)
     expect(innerNavigate).toHaveBeenCalledTimes(1)
+  })
+
+  it('should keep auth middleware redirects stable when customNavigate is passed inline', async () => {
+    const navigateSpy = vi.fn()
+
+    const ProtectedRoute = () => {
+      useAuth({ middleware: 'auth', redirectTo: '/signin' })
+
+      return <div>Protected</div>
+    }
+
+    const TestShell = ({ renderKey }: { renderKey: number }) => (
+      <AuthProvider config={mockConfig} customNavigate={(url, options) => navigateSpy(url, options, renderKey)}>
+        <ProtectedRoute />
+      </AuthProvider>
+    )
+
+    const { rerender } = render(<TestShell renderKey={1} />)
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledTimes(1)
+    })
+
+    rerender(<TestShell renderKey={2} />)
+
+    expect(navigateSpy).toHaveBeenCalledTimes(1)
+    expect(navigateSpy).toHaveBeenCalledWith('/signin', undefined, 1)
   })
 })
 
