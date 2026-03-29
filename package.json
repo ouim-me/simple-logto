@@ -41,6 +41,7 @@
     "build:tsc": "tsc",
     "dev": "tsc --watch",
     "test": "vitest",
+    "test:package": "node ./scripts/run-package-audit.mjs",
     "test:smoke": "node ./scripts/run-packed-smoke-tests.mjs",
     "test:coverage": "vitest --coverage",
     "lint": "eslint .",

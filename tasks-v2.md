@@ -293,9 +293,11 @@
   >
   > Added `engines.node` to `package.json` with an explicit supported Node policy (`^18.18.0 || ^20.0.0 || ^22.0.0`), documented the supported Node/React/`@logto/react` ranges in a new `README.md` runtime-support section, and changed GitHub Actions to verify the package on Node 18/20/22. The publish workflow now runs on Node 22 so release automation also stays within the declared support matrix.
 
-- [ ] **8.6 — Add package-content / export audit checks** Public package structure should be validated automatically.
+- [x] **8.6 — Add package-content / export audit checks** Public package structure should be validated automatically.
 
   > Add a CI step that verifies the final tarball contains the expected `dist` files and entrypoints, and that README examples only use supported public imports. This should fail if an export path is removed, renamed, or points at a missing declaration file.
+  >
+  > Added `scripts/run-package-audit.mjs` plus `npm run test:package`. The audit runs `npm pack --json`, verifies the tarball contains the required published metadata files and every file referenced by `main` / `module` / `types` / `exports`, and scans README code fences for `@ouim/simple-logto` imports so unsupported subpaths fail the build. Wired it into both GitHub Actions workflows after `npm run build`, and updated the local gate docs in `AGENTS.md` and `CONTRIBUTING.md` to include the new check.
 
 ---
 
@@ -309,9 +311,11 @@
 
   > Start with TTL configurability and explicit cache controls. Only add a pluggable cache adapter if a concrete use case justifies the extra API surface. The first step should be small and testable, not a Redis abstraction by default.
 
-- [ ] **9.2 — Review and remove unnecessary reload behavior in `SignInPage`** Forced reloads should be eliminated or documented as an explicit contract.
+- [x] **9.2 — Review and remove unnecessary reload behavior in `SignInPage`** Forced reloads should be eliminated or documented as an explicit contract.
 
   > `src/signin.tsx` still reloads the page when the user is already authenticated and the current path is `/`. Confirm whether this is actually needed for Logto state synchronization; if not, remove it. If it is needed, document the exact reason and scope so consumers understand the tradeoff.
+  >
+  > Removed the `window.location.reload()` branch from `SignInPage` when an already-authenticated user lands on `/`. The reload was unnecessary because auth state synchronization already happens in `AuthProvider` / `useAuth`; the page only needs to redirect to `/` when it is reached from another route. Added a regression test covering the authenticated-at-root case to ensure the component now stays put without a hard refresh.
 
 - [ ] **9.3 — Add lifecycle callbacks to `AuthProvider`** Hooks for important auth transitions would improve integration with host apps.
 
