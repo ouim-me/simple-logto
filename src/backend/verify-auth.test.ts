@@ -389,179 +389,203 @@ describe('JWT Verification Logic', () => {
       })
     })
   })
-})
 
-// ---------------------------------------------------------------------------
-// Task 5.4 — verifyTokenClaims / validatePayloadShape edge cases
-// These tests exercise claim validation paths that the base suite doesn't cover:
-// audience as a string array (RFC 7519), missing/empty sub, missing iss,
-// malformed exp, and an expired-at-exactly-now token.
-// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Task 5.4 — verifyTokenClaims / validatePayloadShape edge cases
+  // These tests exercise claim validation paths that the base suite doesn't cover:
+  // audience as a string array (RFC 7519), missing/empty sub, missing iss,
+  // malformed exp, and an expired-at-exactly-now token.
+  // ---------------------------------------------------------------------------
 
-/** Shared JWKS mock used by the edge-case tests */
-const edgeCaseMockJwks = {
-  ok: true,
-  json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'n', e: 'AQAB' }] }),
-}
+  /** Shared JWKS mock used by the edge-case tests */
+  const edgeCaseMockJwks = {
+    ok: true,
+    json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'n', e: 'AQAB' }] }),
+  }
 
-describe('verifyTokenClaims — audience array (RFC 7519)', () => {
-  const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+  describe('verifyTokenClaims — audience array (RFC 7519)', () => {
+    const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
 
-  beforeEach(() => {
-    vi.resetAllMocks()
-  })
+    it('should accept aud as string array when the expected audience is included', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-aud-array',
+          iss: 'https://test.logto.app/oidc',
+          aud: ['urn:logto:resource:api', 'urn:logto:resource:other'],
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
 
-  it('should accept aud as string array when the expected audience is included', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-aud-array',
-        iss: 'https://test.logto.app/oidc',
-        aud: ['urn:logto:resource:api', 'urn:logto:resource:other'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
+      const result = await verifyLogtoToken(mockToken, mockOptions)
+      expect(result.isAuthenticated).toBe(true)
+      expect(result.userId).toBe('user-aud-array')
     })
 
-    const result = await verifyLogtoToken(mockToken, mockOptions)
-    expect(result.isAuthenticated).toBe(true)
-    expect(result.userId).toBe('user-aud-array')
-  })
+    it('should reject aud as string array when the expected audience is NOT included', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-aud-mismatch',
+          iss: 'https://test.logto.app/oidc',
+          aud: ['urn:logto:resource:wrong', 'urn:logto:resource:other'],
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
 
-  it('should reject aud as string array when the expected audience is NOT included', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-aud-mismatch',
-        iss: 'https://test.logto.app/oidc',
-        aud: ['urn:logto:resource:wrong', 'urn:logto:resource:other'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow('Invalid audience')
     })
 
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow('Invalid audience')
-  })
-
-  it('should skip audience validation when options.audience is not provided', async () => {
-    const noAudOptions: VerifyAuthOptions = { logtoUrl: 'https://test.logto.app' }
-    ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-no-aud-check',
-        iss: 'https://test.logto.app/oidc',
-        // aud deliberately omitted — no audience option, so check is skipped
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
-    })
-
-    // Should succeed — no audience option means the check is not enforced
-    const result = await verifyLogtoToken(mockToken, noAudOptions)
-    expect(result.isAuthenticated).toBe(true)
-  })
-})
-
-describe('validatePayloadShape — required field enforcement', () => {
-  const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
-
-  beforeEach(() => {
-    vi.resetAllMocks()
-  })
-
-  it('should reject a payload with a missing sub field', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        // sub intentionally absent
-        iss: 'https://test.logto.app/oidc',
-        aud: 'urn:logto:resource:api',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
-    })
-
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/sub/)
-  })
-
-  it('should reject a payload with an empty sub field', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: '   ', // whitespace-only
-        iss: 'https://test.logto.app/oidc',
-        aud: 'urn:logto:resource:api',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
-    })
-
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/sub/)
-  })
-
-  it('should reject a payload with a missing iss field', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-no-iss',
-        // iss intentionally absent
-        aud: 'urn:logto:resource:api',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
-    })
-
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/iss/)
-  })
-
-  it('should reject a payload where exp is a non-numeric type', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-bad-exp',
-        iss: 'https://test.logto.app/oidc',
-        aud: 'urn:logto:resource:api',
-        exp: 'not-a-number', // invalid type
-      },
-    })
-
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/exp/)
-  })
-
-  it('should reject a token whose exp is exactly the current second (boundary: not strictly future)', async () => {
-    vi.useFakeTimers()
-    try {
-      const now = Math.floor(Date.now() / 1000)
+    it('should skip audience validation when options.audience is not provided', async () => {
+      const noAudOptions: VerifyAuthOptions = { logtoUrl: 'https://test.logto.app' }
       ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
       const { jwtVerify } = await import('jose')
       ;(jwtVerify as any).mockResolvedValueOnce({
         payload: {
-          sub: 'user-boundary-exp',
+          sub: 'user-no-aud-check',
           iss: 'https://test.logto.app/oidc',
-          aud: 'urn:logto:resource:api',
-          exp: now - 1, // one second in the past → expired
+          // aud deliberately omitted — no audience option, so check is skipped
+          exp: Math.floor(Date.now() / 1000) + 3600,
         },
       })
 
-      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/expired/)
-    } finally {
-      vi.useRealTimers()
-    }
+      // Should succeed — no audience option means the check is not enforced
+      const result = await verifyLogtoToken(mockToken, noAudOptions)
+      expect(result.isAuthenticated).toBe(true)
+    })
   })
 
-  it('should reject a payload where aud is neither a string nor string[]', async () => {
-    (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
-    const { jwtVerify } = await import('jose')
-    ;(jwtVerify as any).mockResolvedValueOnce({
-      payload: {
-        sub: 'user-bad-aud',
-        iss: 'https://test.logto.app/oidc',
-        aud: 12345, // invalid type
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      },
+  describe('validatePayloadShape — required field enforcement', () => {
+    const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+
+    it('should reject a payload with a missing sub field', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          // sub intentionally absent
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/sub/)
     })
 
-    await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/aud/)
+    it('should reject a payload with an empty sub field', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: '   ', // whitespace-only
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/sub/)
+    })
+
+    it('should reject a payload with a missing iss field', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-no-iss',
+          // iss intentionally absent
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/iss/)
+    })
+
+    it('should reject a payload where exp is a non-numeric type', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-bad-exp',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: 'not-a-number', // invalid type
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/exp/)
+    })
+
+    it('should reject a token with exp one second in the past (exp < now)', async () => {
+      vi.useFakeTimers()
+      try {
+        const now = Math.floor(Date.now() / 1000)
+        ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+        const { jwtVerify } = await import('jose')
+        ;(jwtVerify as any).mockResolvedValueOnce({
+          payload: {
+            sub: 'user-boundary-exp',
+            iss: 'https://test.logto.app/oidc',
+            aud: 'urn:logto:resource:api',
+            exp: now - 1, // one second in the past → expired
+          },
+        })
+
+        await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/expired/)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('should reject a payload where aud is neither a string nor string[]', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-bad-aud',
+          iss: 'https://test.logto.app/oidc',
+          aud: 12345, // invalid type
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/aud/)
+    })
+
+    it('should reject a payload where nbf is a non-numeric type', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-bad-nbf',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          nbf: 'not-a-number', // invalid type — validatePayloadShape must reject this
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/nbf/)
+    })
+
+    it('should reject a payload where scope is a non-string type', async () => {
+      (global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-bad-scope',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          scope: 42, // invalid type — must be string
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/scope/)
+    })
   })
 })

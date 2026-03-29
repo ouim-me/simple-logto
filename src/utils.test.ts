@@ -86,10 +86,13 @@ describe('cookieUtils.getCookie', () => {
   it('should return null when document is not available (SSR guard)', () => {
     // Temporarily hide document to simulate SSR environment
     const original = globalThis.document
-    // @ts-expect-error intentional undefined assignment
-    globalThis.document = undefined
-    expect(cookieUtils.getCookie('any')).toBeNull()
-    globalThis.document = original
+    try {
+      // @ts-expect-error intentional undefined assignment
+      globalThis.document = undefined
+      expect(cookieUtils.getCookie('any')).toBeNull()
+    } finally {
+      globalThis.document = original
+    }
   })
 
   it('should correctly decode percent-encoded cookie values', () => {
