@@ -45,6 +45,7 @@ npm run lint                                   # ESLint check
 npm run lint:fix                               # ESLint with auto-fix
 npx tsc --project tsconfig.build.json --noEmit # type-check without emitting files
 npm run build                                  # full library build (vite + tsc)
+npm run test:package                           # audit packed tarball files + README imports
 npm run test:smoke                             # pack dist/ and verify consumer fixtures
 ```
 
@@ -98,7 +99,7 @@ There is no local Git hook enforcement in this repository. Conventional Commits 
 2. **Write tests** for any new functionality or bug fix.
 3. **Run the full local CI gate** before pushing:
    ```bash
-   npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run && npm run build && npm run test:smoke
+   npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run && npm run build && npm run test:package && npm run test:smoke
    ```
 4. **Open a PR against `rc`** — not `master`.
 5. Ensure the GitHub Actions **CI** workflow passes (the single `Lint · Type-check · Test · Build` job on Node 24 must be green).
