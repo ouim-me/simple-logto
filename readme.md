@@ -282,12 +282,111 @@ import { SignInButton } from '@ouim/simple-logto'
 ;<SignInButton />
 ```
 
+## SSR And Router Boundaries
+
+The frontend entrypoint is intentionally browser-oriented. `AuthProvider`, `useAuth`, `SignInPage`, `CallbackPage`, and `UserCenter` all rely on client-only behaviors such as cookies, `window`, popup messaging, focus events, or browser navigation.
+
+Use these rules when integrating into SSR-capable apps:
+
+- Render frontend auth components only from client components.
+- Keep `/signin` and `/callback` as real browser routes, not server-only handlers.
+- Expect the initial server render to be unauthenticated until the client hydrates and loads the Logto session.
+- Do not treat server-rendered auth state from the frontend package as authoritative for backend access control; use the backend verifier helpers for that.
+
+### React Router
+
+Wrap the router tree in `AuthProvider` and pass a router-aware `customNavigate` callback so auth redirects stay inside the SPA router.
+
+```tsx
+'use client'
+
+import { AuthProvider, CallbackPage, SignInPage } from '@ouim/simple-logto'
+import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
+
+function AuthShell() {
+  const navigate = useNavigate()
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl={`${window.location.origin}/callback`}
+      customNavigate={url => navigate(url)}
+      enablePopupSignIn
+    >
+      <Routes>
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/callback" element={<CallbackPage />} />
+        <Route path="/" element={<Dashboard />} />
+      </Routes>
+    </AuthProvider>
+  )
+}
+
+export function App() {
+  return (
+    <BrowserRouter>
+      <AuthShell />
+    </BrowserRouter>
+  )
+}
+```
+
+### Next.js App Router
+
+Keep the auth UI behind client components and let the backend subpath handle server-side request verification.
+
+```tsx
+// app/providers.tsx
+'use client'
+
+import { AuthProvider } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl={`${process.env.NEXT_PUBLIC_APP_URL}/callback`}
+      customNavigate={url => router.push(url)}
+    >
+      {children}
+    </AuthProvider>
+  )
+}
+```
+
+```tsx
+// app/signin/page.tsx
+'use client'
+
+import { SignInPage } from '@ouim/simple-logto'
+
+export default function SignIn() {
+  return <SignInPage />
+}
+```
+
+```tsx
+// app/callback/page.tsx
+'use client'
+
+import { CallbackPage } from '@ouim/simple-logto'
+
+export default function Callback() {
+  return <CallbackPage />
+}
+```
+
+For protected server routes, route handlers, or middleware, import from `@ouim/simple-logto/backend` instead of trying to read frontend auth state during SSR.
+
 ## Backend API
 
 Import backend helpers from the dedicated subpath:
 
 ```ts
-import { createExpressAuthMiddleware, verifyAuth, verifyNextAuth } from '@ouim/simple-logto/backend'
+import { createExpressAuthMiddleware, hasScopes, requireScopes, verifyAuth, verifyNextAuth } from '@ouim/simple-logto/backend'
 ```
 
 ### Express middleware
@@ -340,6 +439,28 @@ export async function GET(request: Request) {
 }
 ```
 
+### SSR-safe backend verification pattern
+
+For SSR frameworks, make authorization decisions on the server with the backend subpath and pass only the derived result to your rendered UI.
+
+```ts
+import { verifyAuth } from '@ouim/simple-logto/backend'
+
+export async function loadUserFromRequest(request: Request) {
+  const auth = await verifyAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+    allowGuest: true,
+  })
+
+  return {
+    userId: auth.userId,
+    isAuthenticated: auth.isAuthenticated,
+    isGuest: auth.isGuest,
+  }
+}
+```
+
 ### Generic token verification
 
 ```ts
@@ -360,6 +481,40 @@ const auth = await verifyAuth('your-jwt-token', {
 - `allowGuest?`: enables guest auth fallback
 - `jwksCacheTtlMs?`: overrides the default 5 minute in-memory JWKS cache TTL
 - `skipJwksCache?`: bypasses the in-memory JWKS cache for a single verifier/middleware instance
+
+### Multi-scope and role authorization helpers
+
+If you need more than the built-in single `requiredScope` check, use the backend authorization helpers after token verification:
+
+```ts
+import { hasRole, hasScopes, requireRole, requireScopes, verifyAuth } from '@ouim/simple-logto/backend'
+
+const auth = await verifyAuth(request, {
+  logtoUrl: process.env.LOGTO_URL!,
+  audience: process.env.LOGTO_AUDIENCE!,
+})
+
+if (!hasScopes(auth, ['profile:read', 'profile:write'], { mode: 'any' })) {
+  return Response.json({ error: 'Forbidden' }, { status: 403 })
+}
+
+requireScopes(auth, ['profile:read', 'profile:write'])
+
+if (!hasRole(auth, 'admin')) {
+  return Response.json({ error: 'Forbidden' }, { status: 403 })
+}
+
+requireRole(auth, 'admin')
+```
+
+Notes:
+
+- `hasScopes(subject, scopes, { mode })` returns a boolean for either a raw `AuthPayload` or a full `AuthContext`.
+- `requireScopes(subject, scopes, { mode })` throws an error you can map to `403`.
+- `mode: 'all'` is the default; use `mode: 'any'` when any one of the scopes should be enough.
+- Scope parsing follows the OAuth `scope` claim convention: a whitespace-delimited string.
+- `hasRole(subject, role, { claimKeys })` and `requireRole(subject, role, { claimKeys })` check role claims without coupling the logic to Express or Next.js.
+- Role helpers look for `roles` first and then `role` by default. If your Logto tenant maps roles into a custom claim, pass `claimKeys`, for example `['https://example.com/roles']`.
 
 ### JWKS cache controls
 
@@ -452,6 +607,7 @@ import type {
 import type {
   AuthContext,
   AuthPayload,
+  AuthorizationMode,
   VerifyAuthOptions,
   ExpressRequest,
   ExpressResponse,
