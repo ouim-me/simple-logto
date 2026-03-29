@@ -146,6 +146,12 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
  * Uses `randomUUID` from `node:crypto` (available since Node.js 14.17,
  * works in both CJS and ESM builds). Provides 122 bits of entropy —
  * sufficient for CSRF tokens.
+ *
+ * @example
+ * import { generateCsrfToken } from '@ouim/simple-logto/backend';
+ *
+ * const csrfToken = generateCsrfToken();
+ * // Store it in a cookie or send it to the client in a bootstrap response
  */
 export function generateCsrfToken(): string {
   return randomUUID()
@@ -173,6 +179,13 @@ export function generateCsrfToken(): string {
  *   defeat the purpose of the double-submit pattern.
  *
  * @returns {string} A complete `Set-Cookie` header value.
+ *
+ * @example
+ * import { generateCsrfToken, buildCsrfCookieHeader } from '@ouim/simple-logto/backend';
+ *
+ * const token = generateCsrfToken();
+ * const cookie = buildCsrfCookieHeader(token, { sameSite: 'Strict' });
+ * res.setHeader('Set-Cookie', cookie);
  */
 export function buildCsrfCookieHeader(
   token: string,

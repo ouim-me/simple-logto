@@ -232,7 +232,8 @@
 
 <!-- - [ ] **7.7 — Update `copilot-instructions.md` with accurate test and architecture info** Replace stale content with current architecture overview, test patterns, and how to run/add tests. -->
 
-- [ ] **7.8 — Add JSDoc examples for all backend exports** `verifyAuth`, `expressAuthMiddleware`, `verifyNextAuth`, `nextAuthMiddleware` all have JSDoc but lack `@example` blocks. Add minimal, copy-pasteable examples for each.
+- [x] **7.8 — Add JSDoc examples for all backend exports** `verifyAuth`, `expressAuthMiddleware`, `verifyNextAuth`, `nextAuthMiddleware` all have JSDoc but lack `@example` blocks. Add minimal, copy-pasteable examples for each.
+  > Verified that the current backend API surface already had example blocks on the main auth helpers (`verifyLogtoToken`, `createExpressAuthMiddleware`, `verifyNextAuth`, `verifyAuth`, `buildAuthCookieHeader`, `createCsrfMiddleware`, `verifyCsrfToken`). Filled the remaining gap by adding `@example` blocks to the exported CSRF helpers `generateCsrfToken()` and `buildCsrfCookieHeader()`. The task wording is slightly stale: there is no `nextAuthMiddleware` export in the current package, and the Express helper is named `createExpressAuthMiddleware`.
 
 ---
 
