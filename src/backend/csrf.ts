@@ -118,7 +118,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type { ExpressRequest, ExpressResponse, ExpressNext, NextRequest } from './types'
+import type { ExpressRequest, ExpressResponse, ExpressNext, NextRequest } from './types.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants

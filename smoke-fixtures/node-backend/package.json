@@ -1,0 +1,17 @@
+{
+  "name": "simple-logto-smoke-node-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:cjs": "node ./check.cjs",
+    "check:esm": "node ./check.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ouim/simple-logto": "__SIMPLE_LOGTO_TARBALL__"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,8 +1,8 @@
 'use client'
 import React, { useState } from 'react'
-import { useAuth } from '../useAuth'
-import { Button } from './ui/button'
-import type { ButtonProps } from './ui/button'
+import { useAuth } from '../useAuth.js'
+import { Button } from './ui/button.js'
+import type { ButtonProps } from './ui/button.js'
 
 export interface SignInButtonProps extends Omit<ButtonProps, 'onClick'> {
   /**

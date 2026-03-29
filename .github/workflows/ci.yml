@@ -39,3 +39,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Packed consumer smoke tests
+        run: npm run test:smoke

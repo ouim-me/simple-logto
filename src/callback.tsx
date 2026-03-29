@@ -1,7 +1,7 @@
 'use client'
 import React, { useEffect, useRef } from 'react'
 import { useHandleSignInCallback } from '@logto/react'
-import type { CallbackPageProps } from './types'
+import type { CallbackPageProps } from './types.js'
 
 /**
  * CallbackPage Component

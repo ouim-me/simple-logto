@@ -1,9 +1,9 @@
 'use client'
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
-import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils'
-import { NavigationProvider } from './navigation'
-import type { AuthContextType, AuthProviderProps, LogtoUser } from './types'
+import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils.js'
+import { NavigationProvider } from './navigation.js'
+import type { AuthContextType, AuthProviderProps, LogtoUser } from './types.js'
 
 const POPUP_AUTH_EVENT_DELAY = 500
 

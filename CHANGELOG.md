@@ -13,7 +13,6 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - GitHub Actions CI workflow (single Node 24 job: lint → type-check → test → build)
 - GitHub Actions automated npm publish workflow with provenance
 - `CONTRIBUTING.md` with branch protection rules and release process
-- `commitlint` + `husky` Conventional Commits enforcement
 
 ### Fixed
 - Popup sign-in race condition: removed `window.location.reload()` from all popup completion paths

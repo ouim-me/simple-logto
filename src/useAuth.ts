@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useMemo } from 'react'
-import { useAuthContext } from './context'
-import { useNavigation } from './navigation'
-import type { AuthOptions, AuthContextType } from './types'
+import { useAuthContext } from './context.js'
+import { useNavigation } from './navigation.js'
+import type { AuthOptions, AuthContextType } from './types.js'
 
 /**
  * useAuth Hook

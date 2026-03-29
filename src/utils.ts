@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { LogtoUser, NavigationOptions } from './types'
+import type { LogtoUser, NavigationOptions } from './types.js'
 import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import type { LogtoConfig } from '@logto/react'
 

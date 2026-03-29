@@ -1,5 +1,5 @@
 import { importJWK, jwtVerify } from 'jose'
-import type { AuthContext, AuthPayload, VerifyAuthOptions, ExpressRequest, ExpressResponse, ExpressNext, NextRequest } from './types'
+import type { AuthContext, AuthPayload, VerifyAuthOptions, ExpressRequest, ExpressResponse, ExpressNext, NextRequest } from './types.js'
 /**
  * Express middleware for Logto authentication
  */

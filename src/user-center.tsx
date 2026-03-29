@@ -1,10 +1,10 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { useAuth } from './useAuth'
-import { useNavigation } from './navigation'
-import { getInitials, cn } from './utils'
+import { useAuth } from './useAuth.js'
+import { useNavigation } from './navigation.js'
+import { getInitials, cn } from './utils.js'
 import { User, LogOut, UserCircle } from 'lucide-react'
-import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar.js'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +12,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './components/ui/dropdown-menu'
-import { Button } from './components/ui/button'
-import type { AdditionalPage } from './types'
+} from './components/ui/dropdown-menu.js'
+import { Button } from './components/ui/button.js'
+import type { AdditionalPage } from './types.js'
 
 /**
  * UserCenter Component

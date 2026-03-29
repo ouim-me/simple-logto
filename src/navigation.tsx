@@ -1,7 +1,7 @@
 'use client'
 import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react'
-import { navigateTo as fallbackNavigateTo } from './utils'
-import type { NavigationOptions } from './types'
+import { navigateTo as fallbackNavigateTo } from './utils.js'
+import type { NavigationOptions } from './types.js'
 
 type NavigateFunction = (url: string, options?: NavigationOptions) => void
 

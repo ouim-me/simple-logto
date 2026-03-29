@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useAuth } from './useAuth'
-import LoadingSpinner from './components/ui/loading-spinner'
-import type { SignInPageProps } from './types'
+import { useAuth } from './useAuth.js'
+import LoadingSpinner from './components/ui/loading-spinner.js'
+import type { SignInPageProps } from './types.js'
 
 /**
  * SignInPage Component
