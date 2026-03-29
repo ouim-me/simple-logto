@@ -52,6 +52,11 @@ const createMockLogtoContext = (overrides: Partial<ReturnType<typeof useLogto>> 
   ...overrides,
 })
 
+const createMockJwt = (exp: number) => {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ exp })}.signature`
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useLogto).mockReturnValue(createMockLogtoContext())
@@ -344,24 +349,27 @@ describe('Proactive Token Refresh', () => {
     )
   }
 
-  it('refreshes the session shortly before token expiry and reschedules from the new exp', async () => {
-    const initialExp = Math.floor(Date.now() / 1000) + 61
-    const refreshedExp = Math.floor(Date.now() / 1000) + 300
+  it('refreshes based on the access token expiry, not the id token expiry', async () => {
+    const initialAccessTokenExp = Math.floor(Date.now() / 1000) + 61
+    const refreshedAccessTokenExp = Math.floor(Date.now() / 1000) + 300
     const getIdTokenClaims = vi
       .fn()
       .mockResolvedValueOnce({
         sub: 'user-123',
         name: 'Test User',
         email: 'test@example.com',
-        exp: initialExp,
+        exp: Math.floor(Date.now() / 1000) + 3600,
       })
       .mockResolvedValueOnce({
         sub: 'user-123',
         name: 'Test User',
         email: 'test@example.com',
-        exp: refreshedExp,
+        exp: Math.floor(Date.now() / 1000) + 3600,
       })
-    const getAccessToken = vi.fn().mockResolvedValueOnce('token-1').mockResolvedValueOnce('token-2')
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce(createMockJwt(initialAccessTokenExp))
+      .mockResolvedValueOnce(createMockJwt(refreshedAccessTokenExp))
     const signOut = vi.fn()
 
     vi.mocked(useLogto).mockReturnValue(
@@ -381,10 +389,10 @@ describe('Proactive Token Refresh', () => {
 
     await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
     expect(getAccessToken).toHaveBeenCalledTimes(1)
-    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith('token-1')
+    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith(createMockJwt(initialAccessTokenExp))
 
     await waitFor(() => expect(getAccessToken).toHaveBeenCalledTimes(2), { timeout: 3000 })
-    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith('token-2')
+    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith(createMockJwt(refreshedAccessTokenExp))
     expect(signOut).not.toHaveBeenCalled()
   }, 10000)
 
@@ -399,7 +407,7 @@ describe('Proactive Token Refresh', () => {
         exp: initialExp,
       })
       .mockRejectedValueOnce(new Error('invalid_grant'))
-    const getAccessToken = vi.fn().mockResolvedValueOnce('token-1')
+    const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp))
     const signOut = vi.fn()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -445,7 +453,7 @@ describe('Proactive Token Refresh', () => {
         email: 'test@example.com',
         exp: initialExp,
       })
-    const getAccessToken = vi.fn().mockResolvedValueOnce('token-1').mockResolvedValueOnce(null)
+    const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp)).mockResolvedValueOnce(null)
     const signOut = vi.fn()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -471,6 +479,41 @@ describe('Proactive Token Refresh', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('session likely expired'))
 
     warnSpy.mockRestore()
+  }, 10000)
+
+  it('does not enter a 1-second refresh loop when the refreshed token keeps the same exp', async () => {
+    const stableExp = Math.floor(Date.now() / 1000) + 61
+    const stableToken = createMockJwt(stableExp)
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })
+    const getAccessToken = vi.fn().mockResolvedValue(stableToken)
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+    await waitFor(() => expect(getAccessToken).toHaveBeenCalledTimes(2), { timeout: 3000 })
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    })
+
+    expect(getAccessToken).toHaveBeenCalledTimes(2)
   }, 10000)
 })
 

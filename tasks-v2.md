@@ -279,7 +279,7 @@
 
   > Add a background timer in `AuthProvider` that refreshes the access token shortly before `exp`, avoids duplicate refreshes, clears timers on sign-out/unmount, and is covered by tests for refresh success, refresh failure, and expired refresh-token fallback.
   >
-  > Added a provider-level proactive refresh timer in `src/context.tsx` that schedules a forced auth reload 60 seconds before token expiry (with a 1-second minimum delay for already-near-expiry tokens). The timer is cleared on sign-out, unmount, and unauthenticated transitions, and a `refreshInFlightRef` guard prevents overlapping timer-driven refresh attempts. Added coverage in `src/context.test.tsx` for successful scheduled refresh, auth-error refresh failure, and the null-access-token fallback that forces logout when the refresh token is effectively expired.
+  > Added a provider-level proactive refresh timer in `src/context.tsx` that schedules a forced auth reload 60 seconds before the access token expires, keeping the backend auth cookie aligned with the token actually written to `logto_authtoken`. The timer is cleared on sign-out, unmount, and unauthenticated transitions, and the implementation now guards both against overlapping timer-driven refresh attempts and against tight retry loops when a refresh returns an access token with an unchanged `exp`. Added coverage in `src/context.test.tsx` for access-token-driven scheduling, auth-error refresh failure, the null-access-token fallback that forces logout when the refresh token is effectively expired, and the unchanged-`exp` edge case raised in review.
 
 - [x] **8.4 — Make package scripts cross-platform** NPM scripts should work reliably for contributors on Windows, macOS, and Linux.
 
