@@ -147,9 +147,11 @@
 
 **Priority: 🟡 Medium**
 
-- [ ] **5.1 — Fix 12 broken `callback.test.tsx` tests** The `useHandleSignInCallback` mock is not working correctly, causing 12 test failures. Fix the mock setup so all callback flow scenarios are tested: success redirect, error with `onError`, popup success, popup failure.
+- [x] **5.1 — Fix 12 broken `callback.test.tsx` tests** The `useHandleSignInCallback` mock is not working correctly, causing 12 test failures. Fix the mock setup so all callback flow scenarios are tested: success redirect, error with `onError`, popup success, popup failure.
+  > All 23 tests in `callback.test.tsx` are already passing (verified with `npx vitest run`). The mock for `useHandleSignInCallback` was working correctly using a `useEffect` + `setTimeout(0)` pattern that lets the initial render complete before triggering the callback. No changes needed.
 
-- [ ] **5.2 — Fix broken navigation test in `user-center.test.tsx`** The navigation assertion test is noted as broken. Fix the mock router setup and restore the test.
+- [x] **5.2 — Fix broken navigation test in `user-center.test.tsx`** The navigation assertion test is noted as broken. Fix the mock router setup and restore the test.
+  > All 29 tests in `user-center.test.tsx` are already passing. The navigation test uses a `vi.mock('./utils', ...)` pattern that properly stubs `navigateTo`, so the broken state was already resolved before this session. No changes needed.
 
 - [ ] **5.3 — Add tests for popup sign-in flow** Write tests in `context.test.tsx` for: popup window opens, `SIGNIN_SUCCESS` message triggers state update and cleanup, popup blocked by browser, popup times out (5-minute cleanup fires).
 
