@@ -325,9 +325,11 @@
   >
   > Added `onTokenRefresh`, `onAuthError`, and `onSignOut` to `AuthProviderProps` with explicit event payload types in `src/types.ts` instead of a generic emitter. `onTokenRefresh` only fires when an already-loaded authenticated session receives a different access token; `onAuthError` reports both transient and definitive auth failures with a `willSignOut` flag; and `onSignOut` fires immediately before the provider initiates local or global sign-out, including the reason (`user`, `auth_error`, `missing_access_token`, `transient_error_limit`). Added focused context tests for refresh and sign-out/error flows and documented the callbacks in the public README.
 
-- [ ] **9.4 — Improve SSR/client boundary documentation and helpers** The package uses client-only guards in several places; consumers need clearer guidance.
+- [x] **9.4 — Improve SSR/client boundary documentation and helpers** The package uses client-only guards in several places; consumers need clearer guidance.
 
   > Document supported SSR patterns, hydration expectations, and router integration examples for React Router and Next.js. Add small helper docs or examples before adding more runtime abstraction.
+  >
+  > Added an explicit `SSR And Router Boundaries` section to the main `README.md` describing the client-only surface (`AuthProvider`, `useAuth`, `SignInPage`, `CallbackPage`, `UserCenter`), hydration expectations, and the rule that backend authorization must come from `@ouim/simple-logto/backend` during SSR. Also added concrete React Router and Next.js App Router examples, plus matching backend-side guidance in `src/backend/README.md` so the frontend/server split is documented in both docs entrypoints.
 
 - [ ] **9.5 — Add bundle-size monitoring in CI** This package ships UI and auth helpers; size regressions should be visible.
 
@@ -341,17 +343,25 @@
 
 **Priority: 🟢 Low**
 
-- [ ] **10.1 — Add multi-scope authorization helpers** The current API only supports a single `requiredScope`.
+- [x] **10.1 — Add multi-scope authorization helpers** The current API only supports a single `requiredScope`.
 
   > Provide helpers such as `requireScopes(scopes, { mode: 'all' | 'any' })` without coupling them too tightly to Express or Next-specific middleware.
+  >
+  > Added framework-agnostic backend helpers in `src/backend/authorization.ts`: `hasScopes(subject, scopes, { mode })` for boolean checks and `requireScopes(subject, scopes, { mode })` for assertion-style guards. Both accept either a raw `AuthPayload` or a full `AuthContext`, normalize OAuth-style whitespace-delimited scope strings, and support `'all'` / `'any'` matching without changing existing middleware behavior. Exported them from the backend entrypoint, added focused unit coverage in `src/backend/authorization.test.ts`, and documented the pattern in both README surfaces.
 
-- [ ] **10.2 — Add role-based access control (RBAC) helpers** Roles are a common follow-on need once token verification is stable.
+- [x] **10.2 — Add role-based access control (RBAC) helpers** Roles are a common follow-on need once token verification is stable.
 
   > Add helpers like `hasRole` / `requireRole` against Logto role claims, with explicit docs about expected claim shape and tenant configuration assumptions.
+  >
+  > Extended `src/backend/authorization.ts` with `hasRole(subject, role, { claimKeys })` and `requireRole(subject, role, { claimKeys })`, keeping the API framework-agnostic and aligned with the scope helpers from 10.1. The helpers accept `AuthPayload` or `AuthContext`, read `roles` first and `role` second by default, and allow custom claim names for tenants that map roles into namespaced claims. Added focused unit tests for array claims, string claims, custom claim keys, and error cases, and documented the default claim-shape assumptions plus the custom-claim override path in both backend docs surfaces.
 
 - [ ] **10.3 — Add a frontend permission helper** Conditional rendering against auth state should not require every consumer to re-parse permission data manually.
 
   > Consider a narrow `usePermission` hook only after the exact token/claim source is clear and stable in the frontend auth state.
+
+- [ ] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
+
+  > Add minimal fixture coverage for the documented React Router and/or Next.js SSR integration patterns so the examples are validated by CI instead of relying only on README maintenance.
 
 ---
 

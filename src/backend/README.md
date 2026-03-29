@@ -22,6 +22,17 @@ npm install @ouim/simple-logto
 
 ## Usage
 
+## SSR And Runtime Boundary
+
+Use the backend subpath anywhere you need request-time authorization in SSR frameworks. This module is safe for Node.js server contexts and should be the source of truth for access control in:
+
+- Next.js route handlers
+- Next.js middleware
+- server-rendered loaders/actions
+- Express or custom Node servers
+
+Do not try to infer authoritative server auth state from the frontend package during SSR. The frontend entrypoint is browser-first and hydrates auth state on the client; the backend verifier should own request authentication on the server.
+
 ### Express.js Middleware
 
 `createExpressAuthMiddleware` automatically parses cookies for you so there's no need to install or `app.use` a separate `cookie-parser` middleware. Just import and mount the helper as shown below.
@@ -104,6 +115,10 @@ export const config = {
 }
 ```
 
+### Pairing Next.js server checks with client auth UI
+
+Use `@ouim/simple-logto` only in client components such as `app/signin/page.tsx`, `app/callback/page.tsx`, or a client-side providers wrapper. Use `@ouim/simple-logto/backend` in route handlers and middleware. That split avoids hydration confusion and keeps browser-only logic out of the server bundle.
+
 ### Generic Usage
 
 ```javascript
@@ -147,6 +162,55 @@ The verification helpers will look for the JWT token in the following order:
 - `requiredScope`: Required scope for access (optional)
 - `jwksCacheTtlMs`: Override the per-process JWKS cache TTL in milliseconds (optional, defaults to 5 minutes)
 - `skipJwksCache`: Force a fresh JWKS fetch for this verification call instead of reading/writing the in-memory cache (optional)
+
+## Multi-scope Authorization Helpers
+
+`requiredScope` is intentionally narrow. When you need more than one scope, verify the token first and then use the exported helpers:
+
+```ts
+import { hasScopes, requireScopes, verifyAuth } from '@ouim/simple-logto/backend'
+
+const auth = await verifyAuth(request, {
+  logtoUrl: 'https://your-logto-domain.com',
+  audience: 'your-api-resource-identifier',
+})
+
+if (!hasScopes(auth, ['read:reports', 'write:reports'], { mode: 'any' })) {
+  throw new Error('Forbidden')
+}
+
+requireScopes(auth, ['read:reports', 'write:reports'])
+```
+
+- `hasScopes(subject, scopes, { mode })` returns `true` / `false`
+- `requireScopes(subject, scopes, { mode })` throws a descriptive authorization error
+- `mode` defaults to `'all'`; set `'any'` to accept any matching scope
+- Both helpers accept either a raw `AuthPayload` or a full `AuthContext`
+
+## Role-based Authorization Helpers
+
+Use the exported role helpers when your access control is role-oriented instead of scope-oriented:
+
+```ts
+import { hasRole, requireRole, verifyAuth } from '@ouim/simple-logto/backend'
+
+const auth = await verifyAuth(request, {
+  logtoUrl: 'https://your-logto-domain.com',
+  audience: 'your-api-resource-identifier',
+})
+
+if (!hasRole(auth, 'admin')) {
+  throw new Error('Forbidden')
+}
+
+requireRole(auth, 'admin')
+```
+
+- `hasRole(subject, role, { claimKeys })` returns `true` / `false`
+- `requireRole(subject, role, { claimKeys })` throws a descriptive authorization error
+- Default role claim lookup is `roles`, then `role`
+- If your Logto tenant emits roles under a custom namespaced claim, pass `claimKeys` explicitly
+- The helpers accept either a raw `AuthPayload` or a full `AuthContext`
 
 ## JWKS Cache Controls
 
