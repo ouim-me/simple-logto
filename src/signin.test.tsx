@@ -12,6 +12,17 @@ describe('SignInPage', () => {
     vi.clearAllMocks()
     sessionStorage.clear()
     localStorage.clear()
+    Object.defineProperty(window, 'location', {
+      value: {
+        href: 'https://test.example.com/signin',
+        pathname: '/signin',
+        search: '',
+        origin: 'https://test.example.com',
+        reload: vi.fn(),
+      },
+      writable: true,
+      configurable: true,
+    })
     Object.defineProperty(window, 'opener', {
       value: null,
       writable: true,
@@ -65,5 +76,21 @@ describe('SignInPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Custom: Network offline')
     })
     expect(screen.getByRole('alert').parentElement).toHaveClass('custom-error')
+  })
+
+  it('redirects authenticated users to / in redirect flow', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-123', name: 'Test User' },
+      isLoadingUser: false,
+      signOut: vi.fn(),
+      refreshAuth: vi.fn(),
+      signIn: vi.fn(),
+    })
+
+    render(<SignInPage />)
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('/')
+    })
   })
 })
