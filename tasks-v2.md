@@ -275,9 +275,11 @@
   >
   > Added repository-root `SECURITY.md` with a private disclosure policy, supported-version guidance tied to the latest release / current `rc` line, explicit instruction not to file public issues, and two reporting paths: GitHub Security Advisories (when enabled) plus `security@ouim.dev`. Also documented acknowledgement targets, coordinated disclosure expectations, and the package surface covered by the policy.
 
-- [ ] **8.3 — Implement proactive token refresh before expiration** Token refresh is still one of the biggest production-readiness gaps.
+- [x] **8.3 — Implement proactive token refresh before expiration** Token refresh is still one of the biggest production-readiness gaps.
 
   > Add a background timer in `AuthProvider` that refreshes the access token shortly before `exp`, avoids duplicate refreshes, clears timers on sign-out/unmount, and is covered by tests for refresh success, refresh failure, and expired refresh-token fallback.
+  >
+  > Added a provider-level proactive refresh timer in `src/context.tsx` that schedules a forced auth reload 60 seconds before token expiry (with a 1-second minimum delay for already-near-expiry tokens). The timer is cleared on sign-out, unmount, and unauthenticated transitions, and a `refreshInFlightRef` guard prevents overlapping timer-driven refresh attempts. Added coverage in `src/context.test.tsx` for successful scheduled refresh, auth-error refresh failure, and the null-access-token fallback that forces logout when the refresh token is effectively expired.
 
 - [ ] **8.4 — Make package scripts cross-platform** NPM scripts should work reliably for contributors on Windows, macOS, and Linux.
 
