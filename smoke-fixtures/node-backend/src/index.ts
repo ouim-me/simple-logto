@@ -1,4 +1,4 @@
-import { createExpressAuthMiddleware } from '@ouim/simple-logto/backend'
+import { createExpressAuthMiddleware, hasRole, hasScopes, requireRole, requireScopes } from '@ouim/simple-logto/backend'
 import type { AuthContext, VerifyAuthOptions } from '@ouim/simple-logto/backend'
 
 const options: VerifyAuthOptions = {
@@ -13,10 +13,16 @@ const authContext: AuthContext = {
   payload: {
     sub: 'user-1',
     scope: 'openid profile',
+    roles: ['admin'],
   },
 }
 
 const middleware = createExpressAuthMiddleware(options)
+const canManageUsers = hasScopes(authContext, ['openid', 'profile'], { mode: 'all' }) && hasRole(authContext, 'admin')
+
+requireScopes(authContext, 'openid profile')
+requireRole(authContext, 'admin')
 
 void authContext
 void middleware
+void canManageUsers
