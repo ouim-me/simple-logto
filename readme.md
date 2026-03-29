@@ -230,6 +230,20 @@ Optional props:
 
 Use this when you want a dedicated `/signin` route that automatically initiates the auth flow. It also supports popup-based sign-in windows.
 
+Optional props:
+
+- `loadingComponent`
+- `errorComponent`
+- `className`
+
+```tsx
+<SignInPage
+  className="min-h-screen bg-slate-50"
+  loadingComponent={<div>Redirecting to Logto...</div>}
+  errorComponent={error => <div>Could not start sign-in: {error.message}</div>}
+/>
+```
+
 ### `SignInButton`
 
 For cases where you want a reusable trigger instead of manually calling `signIn()`.
@@ -377,9 +391,27 @@ export default nextConfig
 The package ships typed frontend and backend exports.
 
 ```ts
-import type { LogtoUser, AuthOptions, CallbackPageProps, AdditionalPage, SignInButtonProps } from '@ouim/simple-logto'
+import type {
+  LogtoUser,
+  AuthOptions,
+  AuthContextType,
+  AuthProviderProps,
+  CallbackPageProps,
+  SignInPageProps,
+  AdditionalPage,
+  SignInButtonProps,
+} from '@ouim/simple-logto'
 
-import type { AuthContext, AuthPayload, VerifyAuthOptions } from '@ouim/simple-logto/backend'
+import type {
+  AuthContext,
+  AuthPayload,
+  VerifyAuthOptions,
+  ExpressRequest,
+  ExpressResponse,
+  ExpressNext,
+  NextRequest,
+  NextResponse,
+} from '@ouim/simple-logto/backend'
 ```
 
 ## Positioning

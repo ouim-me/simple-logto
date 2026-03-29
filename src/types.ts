@@ -50,6 +50,12 @@ export interface CallbackPageProps {
   redirectTo?: string
 }
 
+export interface SignInPageProps {
+  className?: string
+  loadingComponent?: React.ReactNode
+  errorComponent?: React.ReactNode | ((error: Error) => React.ReactNode)
+}
+
 export interface AdditionalPage {
   link: string
   text: string

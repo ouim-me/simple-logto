@@ -1,6 +1,7 @@
 'use client'
 import React, { useEffect, useRef } from 'react'
 import { useHandleSignInCallback } from '@logto/react'
+import type { CallbackPageProps } from './types'
 
 /**
  * CallbackPage Component
@@ -35,15 +36,6 @@ import { useHandleSignInCallback } from '@logto/react'
  * @returns {React.FC} Component that handles the auth callback flow
  * @see {@link SignInPage} for the sign-in page component
  */
-export interface CallbackPageProps {
-  className?: string
-  loadingComponent?: React.ReactNode
-  successComponent?: React.ReactNode
-  onSuccess?: () => void
-  onError?: (error: Error) => void
-  /** URL to redirect to after successful authentication. Defaults to `'/'`. */
-  redirectTo?: string
-}
 
 // Define keyframes for spin animation
 const spinKeyframes = `

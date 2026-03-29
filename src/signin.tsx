@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './useAuth'
 import LoadingSpinner from './components/ui/loading-spinner'
+import type { SignInPageProps } from './types'
 
 /**
  * SignInPage Component
@@ -32,6 +33,10 @@ import LoadingSpinner from './components/ui/loading-spinner'
  *   <App />
  * </AuthProvider>
  *
+ * @param {string} [className] - CSS classes to apply to the loading/error container
+ * @param {React.ReactNode} [loadingComponent] - Custom loading UI shown while auth state is resolving
+ * @param {React.ReactNode | ((error: Error) => React.ReactNode)} [errorComponent] - Custom error UI shown if sign-in initiation fails
+ *
  * @returns {React.ReactElement|null} Loading spinner during auth, null otherwise
  *
  * @see {@link CallbackPage} for the callback handler page
@@ -39,9 +44,10 @@ import LoadingSpinner from './components/ui/loading-spinner'
  *
  * @internal
  */
-export function SignInPage() {
+export function SignInPage({ className = '', loadingComponent, errorComponent }: SignInPageProps) {
   const { user, signIn, isLoadingUser } = useAuth()
   const signInInProgress = useRef(false)
+  const [signInError, setSignInError] = useState<Error | null>(null)
 
   useEffect(() => {
     if (isLoadingUser) return
@@ -89,15 +95,27 @@ export function SignInPage() {
     // Initiate sign-in if not already in progress
     if (!signInInProgress.current) {
       signInInProgress.current = true
+      setSignInError(null)
       // Pass false to prevent nested popups when already in a popup
-      signIn(undefined, false)
+      void signIn(undefined, false).catch((error: unknown) => {
+        signInInProgress.current = false
+        setSignInError(error instanceof Error ? error : new Error('Failed to start sign-in'))
+      })
     }
   }, [user, isLoadingUser, signIn])
 
+  if (signInError) {
+    return (
+      <div className={`flex min-h-screen items-center justify-center ${className}`.trim()}>
+        {typeof errorComponent === 'function' ? errorComponent(signInError) : (errorComponent ?? <div role="alert">Failed to start sign-in. Please try again.</div>)}
+      </div>
+    )
+  }
+
   if (isLoadingUser) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
+      <div className={`flex min-h-screen items-center justify-center ${className}`.trim()}>
+        {loadingComponent ?? <LoadingSpinner />}
       </div>
     )
   }
