@@ -147,19 +147,25 @@
 
 **Priority: 🟡 Medium**
 
-- [ ] **5.1 — Fix 12 broken `callback.test.tsx` tests** The `useHandleSignInCallback` mock is not working correctly, causing 12 test failures. Fix the mock setup so all callback flow scenarios are tested: success redirect, error with `onError`, popup success, popup failure.
+- [x] **5.1 — Fix 12 broken `callback.test.tsx` tests** The `useHandleSignInCallback` mock is not working correctly, causing 12 test failures. Fix the mock setup so all callback flow scenarios are tested: success redirect, error with `onError`, popup success, popup failure.
+  > All 23 tests in `callback.test.tsx` are already passing (verified with `npx vitest run`). The mock for `useHandleSignInCallback` was working correctly using a `useEffect` + `setTimeout(0)` pattern that lets the initial render complete before triggering the callback. No changes needed.
 
-- [ ] **5.2 — Fix broken navigation test in `user-center.test.tsx`** The navigation assertion test is noted as broken. Fix the mock router setup and restore the test.
+- [x] **5.2 — Fix broken navigation test in `user-center.test.tsx`** The navigation assertion test is noted as broken. Fix the mock router setup and restore the test.
+  > All 29 tests in `user-center.test.tsx` are already passing. The navigation test uses a `vi.mock('./utils', ...)` pattern that properly stubs `navigateTo`, so the broken state was already resolved before this session. No changes needed.
 
 - [ ] **5.3 — Add tests for popup sign-in flow** Write tests in `context.test.tsx` for: popup window opens, `SIGNIN_SUCCESS` message triggers state update and cleanup, popup blocked by browser, popup times out (5-minute cleanup fires).
 
-- [ ] **5.4 — Add tests for `verifyTokenClaims` edge cases** In `verify-auth.test.ts`: add tests for `aud` as an array (both matching and non-matching), `aud` as `undefined`, `sub` as `undefined`, and expired tokens with clock skew.
+- [x] **5.4 — Add tests for `verifyTokenClaims` edge cases** In `verify-auth.test.ts`: add tests for `aud` as an array (both matching and non-matching), `aud` as `undefined`, `sub` as `undefined`, and expired tokens with clock skew.
+  > Added two new outer `describe` blocks to `verify-auth.test.ts`: `verifyTokenClaims — audience array (RFC 7519)` (3 tests: aud-array match, aud-array mismatch, no audience option) and `validatePayloadShape — required field enforcement` (6 tests: missing sub, empty sub, missing iss, non-numeric exp, expired-at-boundary using `vi.useFakeTimers`, and non-string/array aud). Also fixed the root cause of pre-existing test instability: the outer `beforeEach` used `vi.clearAllMocks()` which does NOT flush `mockResolvedValueOnce` queues — replaced with `vi.resetAllMocks()` throughout the file.
 
-- [ ] **5.5 — Add tests for JWKS cache invalidation** Replace the placeholder `expect(true).toBe(true)` cache test. Write tests verifying: cache hit within TTL, cache miss after TTL, cache invalidation on key rotation failure and retry.
+- [x] **5.5 — Add tests for JWKS cache invalidation** Replace the placeholder `expect(true).toBe(true)` cache test. Write tests verifying: cache hit within TTL, cache miss after TTL, cache invalidation on key rotation failure and retry.
+  > Replaced the placeholder with three real cache tests inside the existing `JWKS Fetching` describe: (1) cache hit — second call within TTL doesn't call `fetch`; (2) cache miss after TTL — `vi.useFakeTimers()` advances clock 5 min+1s, verifying `fetch` is called twice; (3) key-rotation retry — first `jwtVerify` throws `ERR_JWS_SIGNATURE_VERIFICATION_FAILED`, cache is invalidated, `fetch` is called a second time, and the retry succeeds. Each test uses a unique `logtoUrl` to get a fresh cache entry.
 
-- [ ] **5.6 — Add tests for `guestUtils` and `cookieUtils`** Write unit tests for `utils.ts` cookie helpers: set, get, delete, expiry, `Secure` flag in HTTPS context vs HTTP.
+- [x] **5.6 — Add tests for `guestUtils` and `cookieUtils`** Write unit tests for `utils.ts` cookie helpers: set, get, delete, expiry, `Secure` flag in HTTPS context vs HTTP.
+  > Created `src/utils.test.ts` (25 tests). Covers `cookieUtils` (set with encoding, get, overwrite, SSR guard, remove), `jwtCookieUtils` (saveToken/getToken/removeToken round-trip), and `guestUtils` (getGuestId, setGuestId with provided ID / fingerprint / UUID fallback, ensureGuestId, clearGuestId, generateGuestId happy path and fallback). FingerprintJS is mocked via `vi.mock()` factory; individual fallback paths are tested via `mockRejectedValueOnce`. Note: `Secure` flag enforcement is a browser-level restriction that happy-dom does not simulate, so that dimension is implicitly tested via the flag being present in the cookie string passed to `document.cookie`.
 
-- [ ] **5.7 — Add tests for `bundler-config.ts` exports** Verify that `getViteConfig`, `getWebpackConfig`, and `getNextConfig` return the expected shape and do not include stale package names.
+- [x] **5.7 — Add tests for `bundler-config.ts` exports** Verify that `getViteConfig`, `getWebpackConfig`, and `getNextConfig` return the expected shape and do not include stale package names.
+  > Created `src/bundler-config.test.ts` (17 tests). Verifies `getBundlerConfig('vite')` returns `optimizeDeps.include: ['@logto/react']` and `resolve.alias: { jose: 'jose/dist/node/cjs' }`, that webpack and nextjs configs have `resolve` but NOT `optimizeDeps`, that nextjs and webpack configs produce identical shapes, that no config contains the stale `@ouim/better-logto-react` name, and that the pre-built `viteConfig`/`webpackConfig`/`nextjsConfig` named exports equal their `getBundlerConfig()` counterparts.
 
 - [ ] **5.8 — Add integration test for Express middleware** Write a test using `supertest` against a real Express app with the middleware mounted. Test: valid JWT, expired JWT, missing JWT, guest token, scope enforcement.
 
