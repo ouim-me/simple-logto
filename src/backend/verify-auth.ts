@@ -205,9 +205,13 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
   // Verify audience — RFC 7519 allows aud to be a string or a string array
   if (audience) {
     const aud = payload.aud
-    const isValid = Array.isArray(aud) ? aud.includes(audience) : aud === audience
+    const expectedAudiences = Array.isArray(audience) ? audience : [audience]
+    const tokenAudiences = Array.isArray(aud) ? aud : aud !== undefined ? [aud] : []
+    const isValid = tokenAudiences.some(tokenAudience => expectedAudiences.includes(tokenAudience))
     if (!isValid) {
-      throw new Error(`Invalid audience. Expected: ${audience}, Got: ${Array.isArray(aud) ? JSON.stringify(aud) : aud}`)
+      throw new Error(
+        `Invalid audience. Expected one of: ${JSON.stringify(expectedAudiences)}, Got: ${Array.isArray(aud) ? JSON.stringify(aud) : aud}`,
+      )
     }
   }
 
@@ -368,7 +372,7 @@ async function verifyWithKeys(
  * @param {string} token - The JWT token to verify (typically from Authorization header or cookie)
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL (e.g., 'https://tenant.logto.app')
- * @param {string} [options.audience] - Expected token audience (resource/API identifier)
+ * @param {string | string[]} [options.audience] - Expected token audience or audiences (resource/API identifier)
  * @param {string} [options.requiredScope] - Required scope that must be present in token
  * @param {string} [options.cookieName] - Cookie name for token storage (default: 'logto_authtoken')
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
@@ -437,7 +441,7 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
  *
  * @param {VerifyAuthOptions} options - Middleware configuration options
  * @param {string} options.logtoUrl - Logto server URL
- * @param {string} [options.audience] - Expected token audience
+ * @param {string | string[]} [options.audience] - Expected token audience or audiences
  * @param {string} [options.requiredScope] - Required scope
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name for token
  * @param {boolean} [options.allowGuest=false] - Allow unauthenticated access as guest
@@ -568,7 +572,7 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
  * @param {NextRequest} request - Next.js request object
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL
- * @param {string} [options.audience] - Expected token audience
+ * @param {string | string[]} [options.audience] - Expected token audience or audiences
  * @param {string} [options.requiredScope] - Required scope
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
@@ -711,7 +715,7 @@ export async function verifyNextAuth(
  *   - A request-like object with cookies and headers properties
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL
- * @param {string} [options.audience] - Expected token audience
+ * @param {string | string[]} [options.audience] - Expected token audience or audiences
  * @param {string} [options.requiredScope] - Required scope
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access

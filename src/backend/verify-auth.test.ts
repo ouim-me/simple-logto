@@ -455,6 +455,48 @@ describe('JWT Verification Logic', () => {
       const result = await verifyLogtoToken(mockToken, noAudOptions)
       expect(result.isAuthenticated).toBe(true)
     })
+
+    it('should accept a token when options.audience is an array and one value matches', async () => {
+      const multiAudienceOptions: VerifyAuthOptions = {
+        logtoUrl: 'https://test.logto.app',
+        audience: ['urn:logto:resource:admin', 'urn:logto:resource:api'],
+      }
+
+      ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-option-aud-array',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      const result = await verifyLogtoToken(mockToken, multiAudienceOptions)
+      expect(result.isAuthenticated).toBe(true)
+      expect(result.userId).toBe('user-option-aud-array')
+    })
+
+    it('should reject a token when options.audience is an array and none of the values match', async () => {
+      const multiAudienceOptions: VerifyAuthOptions = {
+        logtoUrl: 'https://test.logto.app',
+        audience: ['urn:logto:resource:admin', 'urn:logto:resource:billing'],
+      }
+
+      ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-option-aud-array-mismatch',
+          iss: 'https://test.logto.app/oidc',
+          aud: ['urn:logto:resource:api', 'urn:logto:resource:other'],
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, multiAudienceOptions)).rejects.toThrow('Invalid audience')
+    })
   })
 
   describe('validatePayloadShape — required field enforcement', () => {

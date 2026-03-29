@@ -31,7 +31,7 @@ import { createExpressAuthMiddleware } from '@ouim/simple-logto/backend'
 
 const authMiddleware = createExpressAuthMiddleware({
   logtoUrl: 'https://your-logto-domain.com',
-  audience: 'your-api-resource-identifier',
+  audience: ['your-api-resource-identifier', 'your-secondary-resource'], // string or string[]
   cookieName: 'logto_authtoken', // optional, defaults to 'logto_authtoken'
   requiredScope: 'some_scope', // optional
 })
@@ -56,7 +56,7 @@ import { verifyNextAuth } from '@ouim/simple-logto/backend'
 export async function GET(request) {
   const authResult = await verifyNextAuth(request, {
     logtoUrl: 'https://your-logto-domain.com',
-    audience: 'your-api-resource-identifier',
+    audience: 'your-api-resource-identifier', // or ['api-audience', 'fallback-audience']
     cookieName: 'logto_authtoken', // optional
     requiredScope: 'some_scope', // optional
   })
@@ -142,7 +142,7 @@ The verification helpers will look for the JWT token in the following order:
 ## Configuration Options
 
 - `logtoUrl`: Your Logto server URL (required)
-- `audience`: Your API resource identifier (required)
+- `audience`: Your API resource identifier or allowed identifiers (required for protected resource APIs, accepts `string | string[]`)
 - `cookieName`: Custom cookie name (optional, defaults to 'logto_authtoken')
 - `requiredScope`: Required scope for access (optional)
 

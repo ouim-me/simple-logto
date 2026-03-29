@@ -230,6 +230,8 @@ Optional props:
 
 Use this when you want a dedicated `/signin` route that automatically initiates the auth flow. It also supports popup-based sign-in windows.
 
+If you enable popup sign-in on `AuthProvider`, you should still define a real `/signin` route that renders `SignInPage`. The popup window navigates to that route first, and `SignInPage` is what kicks off the Logto flow inside the popup.
+
 Optional props:
 
 - `loadingComponent`
@@ -326,7 +328,7 @@ const auth = await verifyAuth('your-jwt-token', {
 ### Backend options
 
 - `logtoUrl`: required
-- `audience`: required
+- `audience`: required for protected API resources, accepts either a single audience string or an array of allowed audiences
 - `cookieName?`: defaults to `logto_authtoken`
 - `requiredScope?`: rejects requests missing the given scope
 - `allowGuest?`: enables guest auth fallback
