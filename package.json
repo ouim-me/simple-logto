@@ -45,7 +45,7 @@
     "test:coverage": "vitest --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "publish": "npm publish --access public --provenance"
   },
@@ -87,6 +87,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "express": "^5.2.1",
     "happy-dom": "^20.7.0",
+    "rimraf": "^5.0.10",
     "supertest": "^7.2.2",
     "typescript": "^5.0.4",
     "vite": "^4.0.0",

@@ -5,23 +5,13 @@ import { AuthProvider } from './context'
 import { useAuthContext } from './context'
 import { useAuth } from './useAuth'
 import { useNavigation } from './navigation'
-import type { LogtoConfig } from '@logto/react'
+import { useLogto, type LogtoConfig } from '@logto/react'
+import { jwtCookieUtils } from './utils'
 
 // Mock @logto/react
 vi.mock('@logto/react', () => ({
   LogtoProvider: ({ children }: { children: ReactNode }) => children,
-  useLogto: () => ({
-    isAuthenticated: false,
-    isLoading: false,
-    getIdTokenClaims: vi.fn().mockResolvedValue({
-      sub: 'user-123',
-      name: 'Test User',
-      email: 'test@example.com',
-    }),
-    getAccessToken: vi.fn().mockResolvedValue('mock-token'),
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-  }),
+  useLogto: vi.fn(),
 }))
 
 // Mock utils
@@ -48,15 +38,35 @@ const mockConfig: LogtoConfig = {
   appId: 'test-app-id',
 }
 
+const createMockLogtoContext = (overrides: Partial<ReturnType<typeof useLogto>> = {}) => ({
+  isAuthenticated: false,
+  isLoading: false,
+  getIdTokenClaims: vi.fn().mockResolvedValue({
+    sub: 'user-123',
+    name: 'Test User',
+    email: 'test@example.com',
+  }),
+  getAccessToken: vi.fn().mockResolvedValue('mock-token'),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+  ...overrides,
+})
+
+const createMockJwt = (exp: number) => {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ exp })}.signature`
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(useLogto).mockReturnValue(createMockLogtoContext())
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
+
 describe('AuthProvider Context', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  afterEach(() => {
-    vi.clearAllMocks()
-  })
-
   it('should render children', () => {
     render(
       <AuthProvider config={mockConfig}>
@@ -327,6 +337,186 @@ describe('Development Config Warnings', () => {
   })
 })
 
+describe('Proactive Token Refresh', () => {
+  const AuthStateProbe = () => {
+    const { user, isLoadingUser } = useAuthContext()
+
+    return (
+      <div>
+        <div>loading: {isLoadingUser ? 'true' : 'false'}</div>
+        <div>user: {user ? user.id : 'none'}</div>
+      </div>
+    )
+  }
+
+  it('refreshes based on the access token expiry, not the id token expiry', async () => {
+    const initialAccessTokenExp = Math.floor(Date.now() / 1000) + 61
+    const refreshedAccessTokenExp = Math.floor(Date.now() / 1000) + 300
+    const getIdTokenClaims = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce(createMockJwt(initialAccessTokenExp))
+      .mockResolvedValueOnce(createMockJwt(refreshedAccessTokenExp))
+    const signOut = vi.fn()
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+        signOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+    expect(getAccessToken).toHaveBeenCalledTimes(1)
+    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith(createMockJwt(initialAccessTokenExp))
+
+    await waitFor(() => expect(getAccessToken).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    expect(jwtCookieUtils.saveToken).toHaveBeenLastCalledWith(createMockJwt(refreshedAccessTokenExp))
+    expect(signOut).not.toHaveBeenCalled()
+  }, 10000)
+
+  it('signs the user out when a scheduled refresh fails with an auth error', async () => {
+    const initialExp = Math.floor(Date.now() / 1000) + 61
+    const getIdTokenClaims = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+        exp: initialExp,
+      })
+      .mockRejectedValueOnce(new Error('invalid_grant'))
+    const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp))
+    const signOut = vi.fn()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+        signOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    expect(jwtCookieUtils.removeToken).toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('forcing logout:'), 'invalid_grant')
+
+    warnSpy.mockRestore()
+    errorSpy.mockRestore()
+  }, 10000)
+
+  it('falls back to logout when refresh returns no access token, indicating an expired refresh token', async () => {
+    const initialExp = Math.floor(Date.now() / 1000) + 61
+    const getIdTokenClaims = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+        exp: initialExp,
+      })
+      .mockResolvedValueOnce({
+        sub: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+        exp: initialExp,
+      })
+    const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp)).mockResolvedValueOnce(null)
+    const signOut = vi.fn()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+        signOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    expect(jwtCookieUtils.removeToken).toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('session likely expired'))
+
+    warnSpy.mockRestore()
+  }, 10000)
+
+  it('does not enter a 1-second refresh loop when the refreshed token keeps the same exp', async () => {
+    const stableExp = Math.floor(Date.now() / 1000) + 61
+    const stableToken = createMockJwt(stableExp)
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })
+    const getAccessToken = vi.fn().mockResolvedValue(stableToken)
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
+    await waitFor(() => expect(getAccessToken).toHaveBeenCalledTimes(2), { timeout: 3000 })
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    })
+
+    expect(getAccessToken).toHaveBeenCalledTimes(2)
+  }, 10000)
+})
+
 // ---------------------------------------------------------------------------
 // Popup Sign-in Flow (task 5.3)
 // ---------------------------------------------------------------------------
@@ -346,6 +536,7 @@ describe('Popup Sign-in Flow', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(useLogto).mockReturnValue(createMockLogtoContext())
     mockPopup = { closed: false, close: vi.fn() }
     // Replace window.open with a mock that returns our popup handle
     Object.defineProperty(window, 'open', {

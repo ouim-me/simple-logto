@@ -6,6 +6,43 @@ import { NavigationProvider } from './navigation.js'
 import type { AuthContextType, AuthProviderProps, LogtoUser } from './types.js'
 
 const POPUP_AUTH_EVENT_DELAY = 500
+const TOKEN_REFRESH_BUFFER_MS = 60_000
+const MIN_TOKEN_REFRESH_DELAY_MS = 1_000
+const TOKEN_REFRESH_RETRY_MS = 15_000
+
+const decodeBase64Url = (value: string): string | null => {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+
+    if (typeof atob === 'function') {
+      return atob(padded)
+    }
+
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(padded, 'base64').toString('utf8')
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+const getJwtExpiration = (token: string): number | undefined => {
+  const payload = token.split('.')[1]
+  if (!payload) return undefined
+
+  const decodedPayload = decodeBase64Url(payload)
+  if (!decodedPayload) return undefined
+
+  try {
+    const parsed = JSON.parse(decodedPayload) as { exp?: unknown }
+    return typeof parsed.exp === 'number' ? parsed.exp : undefined
+  } catch {
+    return undefined
+  }
+}
 
 // Create auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -98,6 +135,12 @@ const InternalAuthProvider = ({
   const transientErrorCount = useRef<number>(0)
   /** Pending exponential-backoff retry timer; cleared on successful load or unmount. */
   const backoffTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>()
+  /** Pending proactive token refresh timer; cleared whenever auth state changes. */
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>()
+  /** Prevents overlapping timer-driven refresh attempts. */
+  const refreshInFlightRef = useRef<boolean>(false)
+  /** Tracks the last access-token expiry used for scheduling to avoid tight loops when exp does not advance. */
+  const lastScheduledTokenExpRef = useRef<number | undefined>()
   /** Set to true in the unmount cleanup; guards async callbacks against firing on dead component. */
   const isUnmountedRef = useRef<boolean>(false)
   /** Tracks the popup-closed polling interval so it can be cleared on provider unmount. */
@@ -112,6 +155,55 @@ const InternalAuthProvider = ({
    */
   const MAX_TRANSIENT_ERRORS = 5
   const MIN_LOAD_INTERVAL = 1000 // 1 second between calls
+
+  const clearRefreshTimer = useCallback(() => {
+    clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = undefined
+  }, [])
+
+  const resetRefreshSchedule = useCallback(() => {
+    clearRefreshTimer()
+    lastScheduledTokenExpRef.current = undefined
+  }, [clearRefreshTimer])
+
+  const scheduleTokenRefresh = useCallback(
+    (exp?: number) => {
+      clearRefreshTimer()
+
+      if (!isAuthenticated || exp === undefined) {
+        return
+      }
+
+      const previousExp = lastScheduledTokenExpRef.current
+      const expiresAtMs = exp * 1000
+      const timeUntilExpiry = expiresAtMs - Date.now()
+      const isUnchangedOrOlderExp = previousExp !== undefined && exp <= previousExp
+      let refreshDelay = timeUntilExpiry - TOKEN_REFRESH_BUFFER_MS
+
+      if (isUnchangedOrOlderExp && refreshDelay <= MIN_TOKEN_REFRESH_DELAY_MS) {
+        // If the SDK gave us the same access-token expiry again, avoid re-entering the
+        // refresh path every second. Retry on a slower cadence while the token is still valid.
+        refreshDelay = Math.min(Math.max(timeUntilExpiry, MIN_TOKEN_REFRESH_DELAY_MS), TOKEN_REFRESH_RETRY_MS)
+      } else {
+        refreshDelay = Math.max(refreshDelay, MIN_TOKEN_REFRESH_DELAY_MS)
+      }
+
+      lastScheduledTokenExpRef.current = exp
+
+      refreshTimerRef.current = setTimeout(() => {
+        if (isUnmountedRef.current || refreshInFlightRef.current) {
+          return
+        }
+
+        refreshInFlightRef.current = true
+
+        void loadUserRef.current(true).finally(() => {
+          refreshInFlightRef.current = false
+        })
+      }, refreshDelay)
+    },
+    [clearRefreshTimer, isAuthenticated],
+  )
 
   const loadUser = useCallback(
     async (forceRefresh?: boolean) => {
@@ -135,12 +227,14 @@ const InternalAuthProvider = ({
 
           if (jwt) {
             // Only set user as logged in if we actually have a valid access token
+            const tokenExp = getJwtExpiration(jwt)
             jwtCookieUtils.saveToken(jwt)
             setUser(transformUser(claims))
             // Reset all error counters and any pending backoff on a successful fetch
             errorCount.current = 0
             transientErrorCount.current = 0
             clearTimeout(backoffTimerRef.current)
+            scheduleTokenRefresh(tokenExp)
           } else {
             // Refresh token expired (e.g. user was gone > 30 days) — session is dead.
             // The Logto SDK still reports isAuthenticated=true because it reads stale
@@ -148,6 +242,7 @@ const InternalAuthProvider = ({
             console.warn('Access token unavailable — session likely expired. Forcing logout.')
             setUser(null)
             jwtCookieUtils.removeToken()
+            resetRefreshSchedule()
             await logtoSignOut()
           }
         } catch (error: unknown) {
@@ -221,6 +316,7 @@ const InternalAuthProvider = ({
               setUser(null)
               jwtCookieUtils.removeToken()
               transientErrorCount.current = 0
+              resetRefreshSchedule()
               try {
                 await logtoSignOut()
               } catch (logoutError) {
@@ -236,6 +332,7 @@ const InternalAuthProvider = ({
             clearTimeout(backoffTimerRef.current)
             setUser(null)
             jwtCookieUtils.removeToken()
+            resetRefreshSchedule()
             errorCount.current += 1
             transientErrorCount.current = 0
 
@@ -263,11 +360,12 @@ const InternalAuthProvider = ({
         errorCount.current = 0
         transientErrorCount.current = 0
         clearTimeout(backoffTimerRef.current)
+        resetRefreshSchedule()
       }
 
       setIsLoadingUser(false)
     },
-    [defaultResource, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, logtoSignOut],
+    [defaultResource, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, logtoSignOut, resetRefreshSchedule, scheduleTokenRefresh],
   )
 
   useEffect(() => {
@@ -281,12 +379,13 @@ const InternalAuthProvider = ({
       // on a dead component tree (guards against the timer/unmount race condition).
       isUnmountedRef.current = true
       clearTimeout(backoffTimerRef.current)
+      resetRefreshSchedule()
       // Clean up popup polling interval and 5-minute auto-cleanup timer in case
       // the provider is unmounted while a popup sign-in is still in progress.
       clearInterval(popupIntervalRef.current)
       clearTimeout(popupCleanupTimerRef.current)
     }
-  }, [])
+  }, [resetRefreshSchedule])
 
   // Store the latest loadUser function in a ref to avoid recreating event listeners
   const loadUserRef = useRef(loadUser)
@@ -480,6 +579,7 @@ const InternalAuthProvider = ({
 
       // Always remove the JWT token cookie on sign out
       jwtCookieUtils.removeToken()
+      resetRefreshSchedule()
 
       if (global) {
         // Global sign out - logs out from entire Logto ecosystem
@@ -501,7 +601,7 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [logtoSignOut],
+    [logtoSignOut, resetRefreshSchedule],
   )
 
   const value: AuthContextType = useMemo(
