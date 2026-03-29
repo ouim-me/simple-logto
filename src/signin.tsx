@@ -85,8 +85,6 @@ export function SignInPage({ className = '', loadingComponent, errorComponent }:
       } else {
         if (window.location.pathname !== '/') {
           window.location.href = '/'
-        } else {
-          window.location.reload() // Ensure the app state is updated for the authenticated user
         }
       }
       return

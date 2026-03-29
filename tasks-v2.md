@@ -311,9 +311,11 @@
 
   > Start with TTL configurability and explicit cache controls. Only add a pluggable cache adapter if a concrete use case justifies the extra API surface. The first step should be small and testable, not a Redis abstraction by default.
 
-- [ ] **9.2 — Review and remove unnecessary reload behavior in `SignInPage`** Forced reloads should be eliminated or documented as an explicit contract.
+- [x] **9.2 — Review and remove unnecessary reload behavior in `SignInPage`** Forced reloads should be eliminated or documented as an explicit contract.
 
   > `src/signin.tsx` still reloads the page when the user is already authenticated and the current path is `/`. Confirm whether this is actually needed for Logto state synchronization; if not, remove it. If it is needed, document the exact reason and scope so consumers understand the tradeoff.
+  >
+  > Removed the `window.location.reload()` branch from `SignInPage` when an already-authenticated user lands on `/`. The reload was unnecessary because auth state synchronization already happens in `AuthProvider` / `useAuth`; the page only needs to redirect to `/` when it is reached from another route. Added a regression test covering the authenticated-at-root case to ensure the component now stays put without a hard refresh.
 
 - [ ] **9.3 — Add lifecycle callbacks to `AuthProvider`** Hooks for important auth transitions would improve integration with host apps.
 

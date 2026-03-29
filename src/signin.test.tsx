@@ -93,4 +93,34 @@ describe('SignInPage', () => {
       expect(window.location.href).toBe('/')
     })
   })
+
+  it('does not force a reload when an authenticated user is already on /', async () => {
+    const reload = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: {
+        href: 'https://test.example.com/',
+        pathname: '/',
+        search: '',
+        origin: 'https://test.example.com',
+        reload,
+      },
+      writable: true,
+      configurable: true,
+    })
+
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-123', name: 'Test User' },
+      isLoadingUser: false,
+      signOut: vi.fn(),
+      refreshAuth: vi.fn(),
+      signIn: vi.fn(),
+    })
+
+    render(<SignInPage />)
+
+    await waitFor(() => {
+      expect(reload).not.toHaveBeenCalled()
+      expect(window.location.href).toBe('https://test.example.com/')
+    })
+  })
 })
