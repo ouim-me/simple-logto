@@ -168,7 +168,8 @@
 - [x] **5.7 — Add tests for `bundler-config.ts` exports** Verify that `getViteConfig`, `getWebpackConfig`, and `getNextConfig` return the expected shape and do not include stale package names.
   > Created `src/bundler-config.test.ts` (17 tests). Verifies `getBundlerConfig('vite')` returns `optimizeDeps.include: ['@logto/react']` and `resolve.alias: { jose: 'jose/dist/node/cjs' }`, that webpack and nextjs configs have `resolve` but NOT `optimizeDeps`, that nextjs and webpack configs produce identical shapes, that no config contains the stale `@ouim/better-logto-react` name, and that the pre-built `viteConfig`/`webpackConfig`/`nextjsConfig` named exports equal their `getBundlerConfig()` counterparts.
 
-- [ ] **5.8 — Add integration test for Express middleware** Write a test using `supertest` against a real Express app with the middleware mounted. Test: valid JWT, expired JWT, missing JWT, guest token, scope enforcement.
+- [x] **5.8 — Add integration test for Express middleware** Write a test using `supertest` against a real Express app with the middleware mounted. Test: valid JWT, expired JWT, missing JWT, guest token, scope enforcement.
+  > Added `src/backend/express.integration.test.ts` using a real Express app plus `supertest`. The suite mounts `createExpressAuthMiddleware()` and covers the requested end-to-end cases: valid auth cookie, expired token rejection, missing-token 401, guest-cookie fallback, and required-scope enforcement. Added `express`/`supertest` and their TypeScript types as devDependencies to support this integration-level coverage without changing the published package surface.
 
 - [ ] **5.9 — Add integration test for Next.js route handler** Write a test using `next-test-api-route-handler` or equivalent for `verifyNextAuth`: valid JWT, guest flow, missing token, `allowGuest: false` with no token.
 
