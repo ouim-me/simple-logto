@@ -432,6 +432,63 @@ If your team eventually needs lower-level control, you can still drop down to th
 - backend helpers are exposed from `@ouim/simple-logto/backend`
 - bundler helpers are exposed from `@ouim/simple-logto/bundler-config`
 
+## Troubleshooting
+
+### CORS errors on your backend API
+
+Cause: your API is rejecting the browser origin or not allowing credentialed requests, so auth cookies or bearer-token requests never reach the server correctly.
+
+Fix:
+
+- Allow your frontend origin in the backend CORS config.
+- If you rely on cookies, enable credentials on both sides: backend `Access-Control-Allow-Credentials: true` and frontend `fetch(..., { credentials: 'include' })`.
+- Keep the frontend app, callback route, and backend cookie domain aligned. A cookie set for one host will not be sent to another.
+
+### JWKS fetch failures
+
+Cause: the backend cannot reach `https://<your-logto-host>/oidc/jwks`, the `logtoUrl` is wrong, or the Logto tenant URL includes a typo or wrong environment.
+
+Fix:
+
+- Verify `logtoUrl` is the tenant base URL, for example `https://your-tenant.logto.app`.
+- Open `https://your-tenant.logto.app/oidc/jwks` directly and confirm it returns JSON.
+- Check outbound network rules, proxy settings, and TLS certificates on the server running `verifyAuth` / `verifyNextAuth`.
+- If failures happen only after a deployment or key rotation, retry once first: the verifier already invalidates stale JWKS cache entries and refetches keys automatically.
+
+### "Invalid audience"
+
+Cause: the token's `aud` claim does not include the API resource identifier you passed as `audience` in the backend verifier.
+
+Fix:
+
+- Make sure the frontend Logto config requests the same resource in `resources`.
+- Make sure the backend `audience` matches that resource exactly.
+- If your API accepts multiple resources, pass `audience` as an array to backend helpers.
+- Decode a failing token and compare its `aud` claim with your configured `audience` value instead of assuming they match.
+
+### Popup sign-in is blocked
+
+Cause: the browser blocked `window.open`, usually because the sign-in call was not triggered from a direct user interaction or the site is in a stricter popup policy context.
+
+Fix:
+
+- Trigger popup sign-in from a real click or tap handler.
+- Keep a real `/signin` route that renders `SignInPage`; popup flow depends on it.
+- If popup restrictions are unavoidable, disable popup flow and use the default redirect flow instead.
+- Test with browser extensions disabled if a popup blocker is interfering during development.
+
+### Infinite redirect loop
+
+Cause: the app is repeatedly sending unauthenticated users to sign-in without successfully finishing the callback or persisting the token.
+
+Fix:
+
+- Confirm both `/signin` and `/callback` routes exist and render `SignInPage` and `CallbackPage`.
+- Ensure `callbackUrl` in `AuthProvider` exactly matches the redirect URI configured in Logto.
+- Do not protect the callback route itself with `useAuth({ middleware: 'auth' })`.
+- If you use custom navigation, verify it does not rewrite the callback URL or strip query parameters before `CallbackPage` runs.
+- Check whether auth cookies are being cleared or blocked after callback, especially across different domains, subdomains, or HTTP/non-HTTPS environments.
+
 ## License
 
 MIT
