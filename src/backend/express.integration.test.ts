@@ -81,6 +81,30 @@ describe('createExpressAuthMiddleware integration', () => {
     })
   })
 
+  it('accepts a valid JWT from the Authorization header', async () => {
+    const logtoUrl = 'https://test.logto.app/express-bearer'
+    vi.mocked(jwtVerify).mockResolvedValueOnce({
+      payload: buildPayload(logtoUrl),
+      protectedHeader: {},
+    } as never)
+
+    const app = buildApp({
+      logtoUrl,
+      audience: 'urn:logto:resource:api',
+    })
+
+    const response = await request(app)
+      .get('/session')
+      .set('Authorization', `Bearer ${validToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.auth).toMatchObject({
+      userId: 'user-123',
+      isAuthenticated: true,
+      isGuest: false,
+    })
+  })
+
   it('rejects expired JWTs', async () => {
     const logtoUrl = 'https://test.logto.app/express-expired'
     vi.mocked(jwtVerify).mockResolvedValueOnce({

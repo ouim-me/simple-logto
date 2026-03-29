@@ -129,6 +129,33 @@ describe('verifyNextAuth route handler integration', () => {
     })
   })
 
+  it('returns an authenticated session for a valid Bearer token header', async () => {
+    const logtoUrl = 'https://test.logto.app/next-bearer'
+    vi.mocked(jwtVerify).mockResolvedValueOnce({
+      payload: buildPayload(logtoUrl),
+      protectedHeader: {},
+    } as never)
+
+    const response = await routeHandler(
+      createRouteRequest({
+        authorization: `Bearer ${validToken}`,
+      }),
+      {
+        logtoUrl,
+        audience: 'urn:logto:resource:api',
+      },
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      auth: {
+        userId: 'user-123',
+        isAuthenticated: true,
+        isGuest: false,
+      },
+    })
+  })
+
   it('returns a guest session when allowGuest is enabled and a guest cookie is present', async () => {
     const response = await routeHandler(
       createRouteRequest({
