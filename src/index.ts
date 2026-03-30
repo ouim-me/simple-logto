@@ -1,3 +1,5 @@
+'use client'
+
 export { AuthProvider } from './context.js'
 export { useAuth } from './useAuth.js'
 export { usePermission } from './usePermission.js'

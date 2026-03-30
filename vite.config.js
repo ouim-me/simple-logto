@@ -1,7 +1,27 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 
+const clientEntrypoints = new Set(['index.js', 'index.cjs'])
+
+function preserveClientDirective() {
+  return {
+    name: 'preserve-client-directive',
+    generateBundle(_outputOptions, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk' || !clientEntrypoints.has(chunk.fileName)) {
+          continue
+        }
+
+        if (!chunk.code.startsWith("'use client';")) {
+          chunk.code = `'use client';\n${chunk.code}`
+        }
+      }
+    },
+  }
+}
+
 export default defineConfig({
+  plugins: [preserveClientDirective()],
   build: {
     lib: {
       entry: {
