@@ -795,8 +795,8 @@ describe('Popup Sign-in Flow', () => {
 
   it('warns and returns early (no crash, no interval) when the popup is blocked', async () => {
     // Browser blocked the popup — window.open returns null
-    // eslint-disable-next-line @typescript-eslint/no-extra-semi
-    ;(window.open as ReturnType<typeof vi.fn>).mockReturnValue(null)
+    const openMock = window.open as ReturnType<typeof vi.fn>
+    openMock.mockReturnValue(null)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     render(

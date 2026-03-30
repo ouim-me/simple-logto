@@ -567,6 +567,7 @@ const InternalAuthProvider = ({
       setIsLoadingUser(false)
     },
     [
+      clearPopupAuthRetry,
       clearTrackedAccessToken,
       defaultResource,
       emitAuthError,
@@ -578,6 +579,7 @@ const InternalAuthProvider = ({
       performGlobalSignOut,
       resetRefreshSchedule,
       scheduleTokenRefresh,
+      setLocalSignOutState,
     ],
   )
 
@@ -664,7 +666,7 @@ const InternalAuthProvider = ({
       window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('auth-state-changed', handleAuthChange)
     }
-  }, []) // Empty dependency array to prevent recreating listeners
+  }, [queuePopupAuthRefresh]) // Stable callback dependency keeps the listeners current without re-subscribing on every render.
 
   const signIn = useCallback(
     async (overrideCallbackUrl?: string, usePopup?: boolean) => {
@@ -783,7 +785,7 @@ const InternalAuthProvider = ({
         popupCleanupTimerRef.current = cleanupTimeoutId
       }
     },
-    [enablePopupSignIn, callbackUrl, logtoSignIn, setLocalSignOutState],
+    [enablePopupSignIn, callbackUrl, logtoSignIn, queuePopupAuthRefresh, setLocalSignOutState],
   )
 
   const signOut = useCallback(
