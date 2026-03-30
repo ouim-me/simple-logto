@@ -11,6 +11,8 @@ It wraps `@logto/react` with the pieces most teams end up building anyway:
 
 If you want Logto without re-assembling the same frontend and backend auth plumbing from scratch, this package is the opinionated fast path.
 
+> Wanna try it? checkout the library live on: [tstore.ouim.me](https://tstore.ouim.me/) & [mocka.ouim.me](https://mocka.ouim.me/)
+
 ## What It Actually Ships
 
 ### Frontend
@@ -343,7 +345,6 @@ For cases where you want a reusable trigger instead of manually calling `signIn(
 
 ```tsx
 import { SignInButton } from '@ouim/simple-logto'
-
 ;<SignInButton />
 ```
 
@@ -411,11 +412,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   return (
-    <AuthProvider
-      config={logtoConfig}
-      callbackUrl={`${process.env.NEXT_PUBLIC_APP_URL}/callback`}
-      customNavigate={url => router.push(url)}
-    >
+    <AuthProvider config={logtoConfig} callbackUrl={`${process.env.NEXT_PUBLIC_APP_URL}/callback`} customNavigate={url => router.push(url)}>
       {children}
     </AuthProvider>
   )

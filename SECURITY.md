@@ -13,7 +13,7 @@ Do not open public GitHub issues for suspected vulnerabilities.
 Use one of these private reporting paths instead:
 
 - GitHub Security Advisories: open a private vulnerability report in this repository's `Security` tab if that feature is enabled for your access level.
-- Email: send a report to `security@ouim.dev`.
+- Email: send a report to `security@ouim.me`.
 
 Include the following when possible:
 
