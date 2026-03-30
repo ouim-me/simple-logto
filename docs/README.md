@@ -92,9 +92,22 @@ GitHub Actions workflows and release procedures:
 
 ---
 
+### 6. Linked Local Package Troubleshooting
+**File:** [LINKED_LOCAL_PACKAGE_TROUBLESHOOTING.md](./LINKED_LOCAL_PACKAGE_TROUBLESHOOTING.md)
+
+Focused guide for local `file:` dependencies and symlinked development:
+- duplicate React / invalid hook call failures
+- Vite dedupe and alias fixes
+- preserving inherited `viteConfig.resolve` settings
+- Next.js App Router client-boundary issues
+
+**Read this if:** You're developing `@ouim/simple-logto` locally and consuming it from another app via `file:../simple-logto` or a symlink.
+
+---
+
 ## Project Standards
 
-### 6. Contributing Guidelines
+### 7. Contributing Guidelines
 **File:** [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 How to contribute to this project:
@@ -109,14 +122,14 @@ How to contribute to this project:
 
 ---
 
-### 7. Code of Conduct
+### 8. Code of Conduct
 **File:** [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)
 
 Community standards and expectations.
 
 ---
 
-### 8. Security Policy
+### 9. Security Policy
 **File:** [../SECURITY.md](../SECURITY.md)
 
 Vulnerability disclosure and responsible security reporting.
