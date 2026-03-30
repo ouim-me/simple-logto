@@ -652,7 +652,10 @@ const InternalAuthProvider = ({
 
     // Listen for custom auth change events
     const handleAuthChange = () => {
-      loadUserRef.current()
+      // Popup completion can dispatch this event before the parent Logto SDK flips
+      // `isAuthenticated` to true. Reuse the forced path while popup rehydration is
+      // pending so the generic auth-state event cannot clobber the retry flow.
+      loadUserRef.current(popupAuthPendingRef.current)
     }
 
     // Add event listeners

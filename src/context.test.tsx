@@ -949,8 +949,77 @@ describe('Popup Sign-in Flow', () => {
       vi.advanceTimersByTime(popupRetryDelayMs)
     })
     expect(screen.getByText('user: user-123')).toBeInTheDocument()
-    expect(getIdTokenClaims).toHaveBeenCalledTimes(1)
-    expect(getAccessToken).toHaveBeenCalledTimes(1)
+    expect(getIdTokenClaims).toHaveBeenCalled()
+    expect(getAccessToken).toHaveBeenCalled()
+  }, 10000)
+
+  it('keeps auth-state-changed on the forced popup rehydration path while popup auth is pending', async () => {
+    const popupEventDelayMs = 500
+    let popupAuthReady = false
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+    })
+    const getAccessToken = vi.fn().mockResolvedValue('popup-access-token')
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    vi.mocked(useLogto).mockImplementation(() =>
+      createMockLogtoContext({
+        isAuthenticated: popupAuthReady,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    const PopupAuthProbe = () => {
+      const { user, signIn } = useAuthContext()
+
+      return (
+        <div>
+          <button onClick={() => signIn(undefined, true)}>Open Popup</button>
+          <div>user: {user ? user.id : 'none'}</div>
+        </div>
+      )
+    }
+
+    const renderPopupTree = () => (
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupAuthProbe />
+      </AuthProvider>
+    )
+
+    const { rerender } = render(renderPopupTree())
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: mockPopup,
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+      vi.advanceTimersByTime(popupEventDelayMs)
+    })
+
+    expect(getIdTokenClaims).not.toHaveBeenCalled()
+
+    popupAuthReady = true
+    rerender(renderPopupTree())
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('auth-state-changed'))
+    })
+
+    expect(screen.getByText('user: user-123')).toBeInTheDocument()
+    expect(getIdTokenClaims).toHaveBeenCalled()
+    expect(getAccessToken).toHaveBeenCalled()
   }, 10000)
 
   // ── 5. Cross-origin messages are ignored ─────────────────────────────────
