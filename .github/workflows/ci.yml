@@ -40,5 +40,8 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Bundle size
+        run: npm run test:size
+
       - name: Package audit
         run: npm run test:package

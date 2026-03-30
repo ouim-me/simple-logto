@@ -358,9 +358,11 @@
   >
   > Added an explicit `SSR And Router Boundaries` section to the main `README.md` describing the client-only surface (`AuthProvider`, `useAuth`, `SignInPage`, `CallbackPage`, `UserCenter`), hydration expectations, and the rule that backend authorization must come from `@ouim/simple-logto/backend` during SSR. Also added concrete React Router and Next.js App Router examples, plus matching backend-side guidance in `src/backend/README.md` so the frontend/server split is documented in both docs entrypoints.
 
-- [ ] **9.5 — Add bundle-size monitoring in CI** This package ships UI and auth helpers; size regressions should be visible.
+- [x] **9.5 — Add bundle-size monitoring in CI** This package ships UI and auth helpers; size regressions should be visible.
 
   > Add a lightweight size check or comparison job in CI so new dependencies or accidental bundling changes are caught early.
+  >
+  > Added `scripts/check-bundle-size.mjs` plus `npm run test:size` to enforce size budgets for all published JavaScript entrypoints (`dist/index`, `dist/backend/index`, and `dist/bundler-config`, both ESM and CJS). The script reports raw and gzip sizes, fails the build if any artifact exceeds its budget, and is now wired into both `.github/workflows/ci.yml` and `.github/workflows/publish.yml` immediately after `npm run build`. Updated `AGENTS.md` and `CONTRIBUTING.md` so the documented local pre-push gate includes the new size check as well.
 
 ---
 

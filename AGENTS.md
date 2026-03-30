@@ -10,6 +10,7 @@ npm run build        # Build: vite build + tsc --emitDeclarationOnly
 npm run dev          # Watch TypeScript (no runnable demo app)
 npm run clean        # Remove dist/
 npm test             # Run vitest (watch mode)
+npm run test:size    # Check published JS entrypoints against size budgets
 npm run test:package # Audit packed tarball contents + README public imports
 npm run test:smoke   # Pack dist/ and verify consumer fixtures install/build/import from the tarball
 npm run lint         # ESLint
@@ -23,7 +24,7 @@ npx vitest run src/useAuth.test.tsx
 
 **Before every `git push`**, run the full local CI gate and confirm it passes:
 ```bash
-npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run && npm run build && npm run test:package && npm run test:smoke
+npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run && npm run build && npm run test:size && npm run test:package && npm run test:smoke
 ```
 Do not push if any step fails. Fix the failure first.
 
