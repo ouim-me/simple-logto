@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>simple-logto example app</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Manrope', sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(240, 180, 120, 0.28), transparent 32%),
+          radial-gradient(circle at bottom right, rgba(123, 159, 112, 0.22), transparent 28%),
+          linear-gradient(180deg, #fcfaf4 0%, #f4efe2 100%);
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: 'Fraunces', serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+  </body>
+</html>
