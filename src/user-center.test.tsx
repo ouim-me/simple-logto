@@ -223,7 +223,28 @@ describe('UserCenter Component', () => {
 
       expect(signOut).toHaveBeenCalledWith({
         callbackUrl: 'https://example.com/current-page',
-        global: true,
+        global: false,
+      })
+    })
+
+    it('should default to local sign-out for safer account-menu behavior', () => {
+      const signOut = vi.fn()
+      mockUseAuth.mockReturnValue({
+        ...defaultMockAuth,
+        user: mockUser,
+        isLoadingUser: false,
+        signOut,
+      })
+
+      render(<UserCenter />)
+
+      const buttons = screen.getAllByTestId('button')
+      const signOutButton = buttons.find(btn => btn.textContent?.includes('Sign out'))
+      signOutButton?.click()
+
+      expect(signOut).toHaveBeenCalledWith({
+        callbackUrl: 'https://example.com/current-page',
+        global: false,
       })
     })
 
@@ -266,7 +287,7 @@ describe('UserCenter Component', () => {
 
       expect(signOut).toHaveBeenCalledWith({
         callbackUrl: customUrl,
-        global: true,
+        global: false,
       })
     })
   })
@@ -487,7 +508,7 @@ describe('UserCenter Component', () => {
 
       expect(signOut).toHaveBeenCalledWith({
         callbackUrl: 'https://example.com/current-page',
-        global: true,
+        global: false,
       })
     })
   })

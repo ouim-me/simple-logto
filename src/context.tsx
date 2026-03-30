@@ -3,9 +3,20 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
 import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils.js'
 import { NavigationProvider } from './navigation.js'
-import type { AuthContextType, AuthErrorEvent, AuthProviderProps, AuthSignOutEvent, AuthSignOutReason, AuthTokenRefreshEvent, LogtoUser } from './types.js'
+import type {
+  AuthContextType,
+  AuthErrorEvent,
+  AuthProviderProps,
+  AuthSignOutEvent,
+  AuthSignOutReason,
+  AuthTokenRefreshEvent,
+  LogtoUser,
+} from './types.js'
 
 const POPUP_AUTH_EVENT_DELAY = 500
+const POPUP_AUTH_RETRY_INTERVAL_MS = 250
+const POPUP_AUTH_MAX_RETRY_ATTEMPTS = 20
+const LOCAL_SIGN_OUT_STORAGE_KEY = 'simple_logto_local_signout'
 const TOKEN_REFRESH_BUFFER_MS = 60_000
 const MIN_TOKEN_REFRESH_DELAY_MS = 1_000
 const TOKEN_REFRESH_RETRY_MS = 15_000
@@ -45,6 +56,26 @@ const getJwtExpiration = (token: string): number | undefined => {
 }
 
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)))
+
+const getLocalSignOutOverride = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.sessionStorage.getItem(LOCAL_SIGN_OUT_STORAGE_KEY) === 'true'
+}
+
+const setLocalSignOutOverride = (active: boolean): void => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (active) {
+    window.sessionStorage.setItem(LOCAL_SIGN_OUT_STORAGE_KEY, 'true')
+  } else {
+    window.sessionStorage.removeItem(LOCAL_SIGN_OUT_STORAGE_KEY)
+  }
+}
 
 // Create auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -155,6 +186,14 @@ const InternalAuthProvider = ({
   const popupIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>()
   /** Tracks the 5-minute popup auto-cleanup timer so it can be cleared on provider unmount. */
   const popupCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>()
+  /** Retries popup auth rehydration while the parent SDK instance catches up with shared storage. */
+  const popupAuthRetryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>()
+  /** Marks that a popup completion signal was received and auth state is expected to rehydrate shortly. */
+  const popupAuthPendingRef = useRef<boolean>(false)
+  /** Counts popup auth rehydration retries so we can stop polling if the SDK never catches up. */
+  const popupAuthRetryCountRef = useRef<number>(0)
+  /** Keeps app-local sign-out isolated from the tenant-wide Logto session. */
+  const localSignOutRef = useRef<boolean>(getLocalSignOutOverride())
   /** Tracks the last access token so refresh callbacks only fire for real token transitions. */
   const lastAccessTokenRef = useRef<string | undefined>()
   /** Tracks the last access token expiry used in refresh callback payloads. */
@@ -236,6 +275,29 @@ const InternalAuthProvider = ({
     lastScheduledTokenExpRef.current = undefined
   }, [clearRefreshTimer])
 
+  const clearPopupAuthRetry = useCallback(() => {
+    clearTimeout(popupAuthRetryTimerRef.current)
+    popupAuthRetryTimerRef.current = undefined
+    popupAuthPendingRef.current = false
+    popupAuthRetryCountRef.current = 0
+  }, [])
+
+  const setLocalSignOutState = useCallback((active: boolean) => {
+    localSignOutRef.current = active
+    setLocalSignOutOverride(active)
+  }, [])
+
+  const queuePopupAuthRefresh = useCallback((delayMs = POPUP_AUTH_EVENT_DELAY) => {
+    popupAuthPendingRef.current = true
+    popupAuthRetryCountRef.current = 0
+    clearTimeout(popupAuthRetryTimerRef.current)
+    popupAuthRetryTimerRef.current = setTimeout(() => {
+      if (!isUnmountedRef.current) {
+        void loadUserRef.current(true)
+      }
+    }, delayMs)
+  }, [])
+
   const scheduleTokenRefresh = useCallback(
     (exp?: number) => {
       clearRefreshTimer()
@@ -291,11 +353,24 @@ const InternalAuthProvider = ({
       setIsLoadingUser(true)
 
       if (isAuthenticated) {
+        if (localSignOutRef.current) {
+          setUser(null)
+          jwtCookieUtils.removeToken()
+          clearTrackedAccessToken()
+          errorCount.current = 0
+          transientErrorCount.current = 0
+          clearTimeout(backoffTimerRef.current)
+          resetRefreshSchedule()
+          setIsLoadingUser(false)
+          return
+        }
+
         try {
           const claims = await getIdTokenClaims()
           const jwt = await getAccessToken(defaultResource)
 
           if (jwt) {
+            clearPopupAuthRetry()
             const nextUser = transformUser(claims)
             // Only set user as logged in if we actually have a valid access token
             const tokenExp = getJwtExpiration(jwt)
@@ -457,6 +532,27 @@ const InternalAuthProvider = ({
           }
         }
       } else {
+        if (localSignOutRef.current) {
+          setLocalSignOutState(false)
+        }
+
+        if (forceRefresh && popupAuthPendingRef.current) {
+          if (popupAuthRetryCountRef.current < POPUP_AUTH_MAX_RETRY_ATTEMPTS) {
+            popupAuthRetryCountRef.current += 1
+            popupAuthRetryTimerRef.current = setTimeout(() => {
+              if (!isUnmountedRef.current) {
+                void loadUserRef.current(true)
+              }
+            }, POPUP_AUTH_RETRY_INTERVAL_MS)
+            // Keep the existing signed-in state intact while the parent SDK instance
+            // rehydrates from the tokens written by the popup flow.
+            setIsLoadingUser(false)
+            return
+          }
+
+          clearPopupAuthRetry()
+        }
+
         setUser(null)
         // Remove token cookie when not authenticated
         jwtCookieUtils.removeToken()
@@ -470,7 +566,21 @@ const InternalAuthProvider = ({
 
       setIsLoadingUser(false)
     },
-    [clearTrackedAccessToken, defaultResource, emitAuthError, emitTokenRefresh, getAccessToken, getIdTokenClaims, isAuthenticated, isLoading, performGlobalSignOut, resetRefreshSchedule, scheduleTokenRefresh],
+    [
+      clearPopupAuthRetry,
+      clearTrackedAccessToken,
+      defaultResource,
+      emitAuthError,
+      emitTokenRefresh,
+      getAccessToken,
+      getIdTokenClaims,
+      isAuthenticated,
+      isLoading,
+      performGlobalSignOut,
+      resetRefreshSchedule,
+      scheduleTokenRefresh,
+      setLocalSignOutState,
+    ],
   )
 
   useEffect(() => {
@@ -489,6 +599,7 @@ const InternalAuthProvider = ({
       // the provider is unmounted while a popup sign-in is still in progress.
       clearInterval(popupIntervalRef.current)
       clearTimeout(popupCleanupTimerRef.current)
+      clearTimeout(popupAuthRetryTimerRef.current)
     }
   }, [resetRefreshSchedule])
 
@@ -522,7 +633,7 @@ const InternalAuthProvider = ({
         // the new tokens that the popup stored in shared localStorage before we try to
         // read claims. forceRefresh bypasses rate-limiting and the isLoading early-return.
         setTimeout(() => {
-          loadUserRef.current(true) // forceRefresh=true to bypass rate limiting
+          queuePopupAuthRefresh()
           window.dispatchEvent(new CustomEvent('auth-state-changed'))
         }, POPUP_AUTH_EVENT_DELAY)
       }
@@ -541,7 +652,10 @@ const InternalAuthProvider = ({
 
     // Listen for custom auth change events
     const handleAuthChange = () => {
-      loadUserRef.current()
+      // Popup completion can dispatch this event before the parent Logto SDK flips
+      // `isAuthenticated` to true. Reuse the forced path while popup rehydration is
+      // pending so the generic auth-state event cannot clobber the retry flow.
+      loadUserRef.current(popupAuthPendingRef.current)
     }
 
     // Add event listeners
@@ -555,12 +669,14 @@ const InternalAuthProvider = ({
       window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('auth-state-changed', handleAuthChange)
     }
-  }, []) // Empty dependency array to prevent recreating listeners
+  }, [queuePopupAuthRefresh]) // Stable callback dependency keeps the listeners current without re-subscribing on every render.
 
   const signIn = useCallback(
     async (overrideCallbackUrl?: string, usePopup?: boolean) => {
       // Only run on client side
       if (typeof window === 'undefined') return
+
+      setLocalSignOutState(false)
 
       // Check if we're already in a popup to prevent infinite loops
       const isInPopup = window.opener && window.opener !== window
@@ -619,7 +735,7 @@ const InternalAuthProvider = ({
             // before we attempt to read claims with forceRefresh=true.
             setTimeout(() => {
               if (!isUnmountedRef.current) {
-                loadUserRef.current(true) // forceRefresh=true to bypass rate limiting and isLoading check
+                queuePopupAuthRefresh(0)
                 window.dispatchEvent(new CustomEvent('auth-state-changed'))
               }
             }, POPUP_AUTH_EVENT_DELAY)
@@ -650,7 +766,7 @@ const InternalAuthProvider = ({
             // shared localStorage before we read claims with forceRefresh=true.
             setTimeout(() => {
               if (!isUnmountedRef.current) {
-                loadUserRef.current(true) // forceRefresh=true to bypass rate limiting
+                queuePopupAuthRefresh(0)
                 window.dispatchEvent(new CustomEvent('auth-state-changed'))
               }
             }, POPUP_AUTH_EVENT_DELAY)
@@ -672,7 +788,7 @@ const InternalAuthProvider = ({
         popupCleanupTimerRef.current = cleanupTimeoutId
       }
     },
-    [enablePopupSignIn, callbackUrl, logtoSignIn],
+    [enablePopupSignIn, callbackUrl, logtoSignIn, queuePopupAuthRefresh, setLocalSignOutState],
   )
 
   const signOut = useCallback(
@@ -686,6 +802,7 @@ const InternalAuthProvider = ({
       jwtCookieUtils.removeToken()
       resetRefreshSchedule()
       clearTrackedAccessToken()
+      clearPopupAuthRetry()
       emitSignOut({
         reason: 'user',
         global,
@@ -693,10 +810,13 @@ const InternalAuthProvider = ({
       })
 
       if (global) {
+        setLocalSignOutState(false)
         // Global sign out - logs out from entire Logto ecosystem
         await logtoSignOut(callbackUrl)
       } else {
         // Local sign out - only clears local session
+        setLocalSignOutState(true)
+        clearTimeout(backoffTimerRef.current)
         setUser(null)
         setIsLoadingUser(false)
 
@@ -712,7 +832,7 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [clearTrackedAccessToken, emitSignOut, logtoSignOut, resetRefreshSchedule],
+    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, resetRefreshSchedule, setLocalSignOutState],
   )
 
   const value: AuthContextType = useMemo(

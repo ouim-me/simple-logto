@@ -19,18 +19,24 @@
 
 **Priority: 🔴 Critical**
 
-- [ ] **CR-1 — Fix popup sign-in completion not rehydrating auth state in the parent app** Popup auth can complete successfully while `useAuth()` still reports `user: null` until the page is manually refreshed.
+- [x] **CR-1 — Fix popup sign-in completion not rehydrating auth state in the parent app** Popup auth can complete successfully while `useAuth()` still reports `user: null` until the page is manually refreshed.
 
   > Confirmed as a library issue in `src/context.tsx`. The popup completion handlers call `loadUserRef.current(true)`, but that path still depends on `useLogto()` already having flipped `isAuthenticated` in the parent window. When the popup closes before the parent Logto instance finishes rehydrating from shared storage, `loadUser()` falls through the unauthenticated branch and leaves the app signed out until a full reload reconstructs the provider.
+  >
+  > Fixed in `src/context.tsx` by treating popup completion as a short-lived rehydration window instead of an immediate signed-out state. Popup success/close handlers now queue a retryable forced refresh, and the unauthenticated branch preserves local state while the parent Logto SDK catches up from shared storage. Added a focused regression test in `src/context.test.tsx` that reproduces the exact race: popup completion arrives first, `isAuthenticated` flips on a later render, and the provider now recovers without a manual page reload.
 
-- [ ] **CR-2 — Fix local sign-out so `signOut({ global: false })` cannot cascade into tenant-wide logout** Consumers need a trustworthy app-local sign-out path that never logs them out of the entire Logto tenant as a side effect.
+- [x] **CR-2 — Fix local sign-out so `signOut({ global: false })` cannot cascade into tenant-wide logout** Consumers need a trustworthy app-local sign-out path that never logs them out of the entire Logto tenant as a side effect.
   > Confirmed as a library issue in `src/context.tsx`. The local sign-out branch clears React state and cookies, but it does not establish a durable local-only signed-out state in the underlying Logto session. On subsequent auth re-sync, the provider can still see an SDK-authenticated session and enter error-driven global logout paths. The implementation needs a true local-session clearing strategy and regression tests proving `global: false` never invokes tenant-wide logout behavior.
+  >
+  > Fixed in `src/context.tsx` by adding a tab-scoped local sign-out override stored in `sessionStorage` (`simple_logto_local_signout`). When `signOut({ global: false })` runs, the provider now clears local user state/cookies, suppresses future auth rehydration from the still-live Logto SDK session, and avoids falling into global logout/error recovery paths on later focus/storage/custom refresh events. The override is cleared automatically when the SDK really becomes unauthenticated or when the consumer starts a new sign-in flow. Added regression coverage proving local sign-out does not call the SDK global logout and remains stable across subsequent auth refresh events.
 
 > User test: Local signout doesn't work at all, nor on userCenter or a dedicated sign-out function
 
-- [ ] **CR-3 — Make `UserCenter` sign-out defaults safe and explicit** A drop-in account menu should not globally log the user out of their whole identity-provider session unless they opt into that behavior.
+- [x] **CR-3 — Make `UserCenter` sign-out defaults safe and explicit** A drop-in account menu should not globally log the user out of their whole identity-provider session unless they opt into that behavior.
 
   > Confirmed as a library issue in `src/user-center.tsx`. `globalSignOut` currently defaults to `true`, so a consumer that renders `UserCenter` without extra props gets tenant-wide logout by default. That default is too risky for a shared UI primitive and should either change to local sign-out or become explicitly named/labeled so it cannot be mistaken for a normal app logout.
+  >
+  > Changed the `UserCenter` default to `globalSignOut = false` and updated its JSDoc/tests/docs to treat app-local sign-out as the safe default. Consumers can still opt into tenant-wide logout explicitly with `globalSignOut={true}`, but rendering the component with no extra props no longer ends the user's wider Logto session by surprise.
 
 ---
 

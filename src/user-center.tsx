@@ -32,7 +32,7 @@ import type { AdditionalPage } from './types.js'
  *
  * @component
  * @param {string} [className] - CSS classes for the container element
- * @param {boolean} [globalSignOut=true] - Whether to perform global sign-out (logs out of entire Logto ecosystem) or local only
+ * @param {boolean} [globalSignOut=false] - Whether to perform global sign-out (logs out of entire Logto ecosystem) or local only
  * @param {string} [signoutCallbackUrl] - URL to redirect to after sign-out (default: current page)
  * @param {AdditionalPage[]} [additionalPages] - Array of custom pages/links to show in dropdown
  * @param {string} [themeClassnames] - Tailwind classnames for theming (light/dark mode)
@@ -65,7 +65,7 @@ export interface UserCenterProps {
 
 export const UserCenter: React.FC<UserCenterProps> = ({
   className = '',
-  globalSignOut = true,
+  globalSignOut = false,
   signoutCallbackUrl,
   additionalPages = [],
   themeClassnames = 'light:bg-stone-800 light:border-stone-700 light:text-stone-200',

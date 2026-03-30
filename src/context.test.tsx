@@ -59,6 +59,7 @@ const createMockJwt = (exp: number) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  sessionStorage.clear()
   vi.mocked(useLogto).mockReturnValue(createMockLogtoContext())
 })
 
@@ -648,6 +649,77 @@ describe('AuthProvider Lifecycle Callbacks', () => {
     expect(logtoSignOut).not.toHaveBeenCalled()
   })
 
+  it('keeps app-local sign-out isolated from the tenant session across auth refreshes', async () => {
+    const logtoSignOut = vi.fn()
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+    })
+    const getAccessToken = vi.fn().mockResolvedValue('mock-token')
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        isAuthenticated: true,
+        getIdTokenClaims,
+        getAccessToken,
+        signOut: logtoSignOut,
+      }),
+    )
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <AuthControls />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Sign Out')).toBeInTheDocument())
+    await waitFor(() => expect(getIdTokenClaims).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByText('Sign Out'))
+
+    expect(logtoSignOut).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem('simple_logto_local_signout')).toBe('true')
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('auth-state-changed'))
+    })
+
+    await waitFor(() => expect(jwtCookieUtils.removeToken).toHaveBeenCalled())
+    expect(getIdTokenClaims).toHaveBeenCalledTimes(1)
+    expect(getAccessToken).toHaveBeenCalledTimes(1)
+    expect(logtoSignOut).not.toHaveBeenCalled()
+  })
+
+  it('clears the local sign-out override when sign-in starts again', async () => {
+    const signIn = vi.fn()
+
+    sessionStorage.setItem('simple_logto_local_signout', 'true')
+
+    vi.mocked(useLogto).mockReturnValue(
+      createMockLogtoContext({
+        signIn,
+      }),
+    )
+
+    const SignInControl = () => {
+      const { signIn: beginSignIn } = useAuthContext()
+      return <button onClick={() => beginSignIn('/dashboard')}>Sign In</button>
+    }
+
+    render(
+      <AuthProvider config={mockConfig}>
+        <SignInControl />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Sign In')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Sign In'))
+
+    expect(sessionStorage.getItem('simple_logto_local_signout')).toBeNull()
+    expect(signIn).toHaveBeenCalledWith('/dashboard')
+  })
+
   it('swallows errors thrown by consumer lifecycle callbacks without breaking sign-out', async () => {
     const onSignOut = vi.fn(() => {
       throw new Error('consumer callback failure')
@@ -723,8 +795,8 @@ describe('Popup Sign-in Flow', () => {
 
   it('warns and returns early (no crash, no interval) when the popup is blocked', async () => {
     // Browser blocked the popup — window.open returns null
-    // eslint-disable-next-line @typescript-eslint/no-extra-semi
-    (window.open as ReturnType<typeof vi.fn>).mockReturnValue(null)
+    const openMock = window.open as ReturnType<typeof vi.fn>
+    openMock.mockReturnValue(null)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     render(
@@ -807,6 +879,148 @@ describe('Popup Sign-in Flow', () => {
 
     expect(mockPopup.close).toHaveBeenCalledOnce()
   })
+
+  it('keeps retrying popup auth rehydration until the parent Logto state flips authenticated', async () => {
+    const popupEventDelayMs = 500
+    const popupRetryDelayMs = 250
+    let popupAuthReady = false
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+    })
+    const getAccessToken = vi.fn().mockResolvedValue('popup-access-token')
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    vi.mocked(useLogto).mockImplementation(() =>
+      createMockLogtoContext({
+        isAuthenticated: popupAuthReady,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    const PopupAuthProbe = () => {
+      const { user, signIn } = useAuthContext()
+
+      return (
+        <div>
+          <button onClick={() => signIn(undefined, true)}>Open Popup</button>
+          <div>user: {user ? user.id : 'none'}</div>
+        </div>
+      )
+    }
+
+    const renderPopupTree = () => (
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupAuthProbe />
+      </AuthProvider>
+    )
+
+    const { rerender } = render(renderPopupTree())
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+    expect(screen.getByText('user: none')).toBeInTheDocument()
+
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: mockPopup,
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+      vi.advanceTimersByTime(popupEventDelayMs)
+      vi.advanceTimersToNextTimer()
+    })
+
+    expect(screen.getByText('user: none')).toBeInTheDocument()
+    expect(getIdTokenClaims).not.toHaveBeenCalled()
+
+    popupAuthReady = true
+    rerender(renderPopupTree())
+
+    await act(async () => {
+      vi.advanceTimersByTime(popupRetryDelayMs)
+    })
+    expect(screen.getByText('user: user-123')).toBeInTheDocument()
+    expect(getIdTokenClaims).toHaveBeenCalled()
+    expect(getAccessToken).toHaveBeenCalled()
+  }, 10000)
+
+  it('keeps auth-state-changed on the forced popup rehydration path while popup auth is pending', async () => {
+    const popupEventDelayMs = 500
+    let popupAuthReady = false
+    const getIdTokenClaims = vi.fn().mockResolvedValue({
+      sub: 'user-123',
+      name: 'Test User',
+      email: 'test@example.com',
+    })
+    const getAccessToken = vi.fn().mockResolvedValue('popup-access-token')
+    const addELSpy = vi.spyOn(window, 'addEventListener')
+
+    vi.mocked(useLogto).mockImplementation(() =>
+      createMockLogtoContext({
+        isAuthenticated: popupAuthReady,
+        getIdTokenClaims,
+        getAccessToken,
+      }),
+    )
+
+    const PopupAuthProbe = () => {
+      const { user, signIn } = useAuthContext()
+
+      return (
+        <div>
+          <button onClick={() => signIn(undefined, true)}>Open Popup</button>
+          <div>user: {user ? user.id : 'none'}</div>
+        </div>
+      )
+    }
+
+    const renderPopupTree = () => (
+      <AuthProvider config={mockConfig} enablePopupSignIn>
+        <PopupAuthProbe />
+      </AuthProvider>
+    )
+
+    const { rerender } = render(renderPopupTree())
+
+    await waitFor(() => expect(screen.getByText('Open Popup')).toBeInTheDocument())
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByText('Open Popup'))
+
+    const msgCalls = addELSpy.mock.calls.filter(([t]) => t === 'message')
+    const messageHandler = msgCalls[msgCalls.length - 1][1] as (e: unknown) => void
+
+    await act(async () => {
+      messageHandler({
+        origin: window.location.origin,
+        source: mockPopup,
+        data: { type: 'SIGNIN_SUCCESS' },
+      })
+      vi.advanceTimersByTime(popupEventDelayMs)
+    })
+
+    expect(getIdTokenClaims).not.toHaveBeenCalled()
+
+    popupAuthReady = true
+    rerender(renderPopupTree())
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('auth-state-changed'))
+    })
+
+    expect(screen.getByText('user: user-123')).toBeInTheDocument()
+    expect(getIdTokenClaims).toHaveBeenCalled()
+    expect(getAccessToken).toHaveBeenCalled()
+  }, 10000)
 
   // ── 5. Cross-origin messages are ignored ─────────────────────────────────
 

@@ -225,7 +225,7 @@ Prebuilt account dropdown for navbars and app shells.
 Supports:
 
 - signed-in and signed-out states
-- local or global sign-out
+- local sign-out by default, or global sign-out when explicitly enabled
 - custom account links
 - custom theme class names
 
@@ -239,6 +239,8 @@ Supports:
   ]}
 />
 ```
+
+Pass `globalSignOut={true}` only when you explicitly want the account menu to end the user's wider Logto tenant session, not just the current app session.
 
 ### `CallbackPage`
 
