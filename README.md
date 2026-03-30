@@ -802,6 +802,17 @@ Fix:
 - If you use custom navigation, verify it does not rewrite the callback URL or strip query parameters before `CallbackPage` runs.
 - Check whether auth cookies are being cleared or blocked after callback, especially across different domains, subdomains, or HTTP/non-HTTPS environments.
 
+### Local `file:` linked package issues
+
+Cause: when `@ouim/simple-logto` is consumed from a local path or symlink, the app can resolve a different React instance than the linked package. That usually shows up as invalid hook calls in Vite apps, or client/server boundary issues in Next.js App Router.
+
+Fix:
+
+- For Vite consumers, dedupe `react` and `react-dom` and alias them to the app's own `node_modules`.
+- When merging `viteConfig`, merge `resolve` and `resolve.alias` instead of replacing them.
+- For Next.js App Router, make sure your local build preserves the frontend entry's `'use client'` directive.
+- See the dedicated guide: [docs/LINKED_LOCAL_PACKAGE_TROUBLESHOOTING.md](./docs/LINKED_LOCAL_PACKAGE_TROUBLESHOOTING.md)
+
 ## License
 
 MIT
