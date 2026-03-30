@@ -414,9 +414,10 @@
   > Upgrade from Vite 4, run the full CI gate, and verify the generated library output and `bundler-config` helpers still behave correctly.
   > Upgraded the library build to Vite 6.4.1 instead of Vite 7/8 to preserve the package's current Node 18 support policy, then ran the full local CI gate successfully (`lint`, type-check, tests, build, size, package audit, and smoke fixtures).
 
-- [ ] **11.3 — Remove leftover repo artifacts** Source control should not keep irrelevant backup files.
+- [x] **11.3 — Remove leftover repo artifacts** Source control should not keep irrelevant backup files.
 
   > Remove `.npmrc.backup` if it is no longer intentionally needed, and tighten `.gitignore` rules for editor or backup artifacts if needed.
+  > Removed the checked-in `.npmrc.backup` token placeholder and expanded `.gitignore` to keep common editor metadata and backup file suffixes out of the repository.
 
 - [ ] **11.4 — Add example applications** Real fixture apps improve adoption and reduce ambiguity in docs.
 

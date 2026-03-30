@@ -2,9 +2,16 @@ node_modules
 dist
 coverage
 .DS_Store
+.vscode/
+.idea/
 *.log
 *.env
 example_app/.env
 .npmrc
+.npmrc.*
+*.bak
+*.backup
+*.orig
+*.rej
 prompt.md
 .tmp
