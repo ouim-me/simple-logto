@@ -4,6 +4,7 @@ coverage
 .DS_Store
 *.log
 *.env
+example_app/.env
 .npmrc
 prompt.md
 .tmp
