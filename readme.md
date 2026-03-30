@@ -218,6 +218,31 @@ const auth = useAuth({
 })
 ```
 
+### `usePermission`
+
+Use `usePermission()` for client-side conditional rendering when the current frontend user claims already include permission data.
+
+```tsx
+import { usePermission } from '@ouim/simple-logto'
+
+function AdminActions() {
+  const canManageUsers = usePermission('manage:users')
+
+  if (!canManageUsers) {
+    return null
+  }
+
+  return <button>Invite user</button>
+}
+```
+
+Notes:
+
+- `usePermission()` reads the `user` object from `AuthProvider`, so it reflects frontend claims only.
+- By default it checks `permissions`, then `scope`, then `scp`.
+- Pass `claimKeys` if your tenant emits permissions under a custom claim name such as `https://example.com/permissions`.
+- While auth state is loading the hook returns `false` so restricted UI does not flash before claims arrive.
+
 ### `UserCenter`
 
 Prebuilt account dropdown for navbars and app shells.
@@ -382,6 +407,8 @@ export default function Callback() {
 ```
 
 For protected server routes, route handlers, or middleware, import from `@ouim/simple-logto/backend` instead of trying to read frontend auth state during SSR.
+
+These React Router and Next.js examples are mirrored by packed smoke fixtures in `smoke-fixtures/` so CI catches export or packaging drift against the documented integration patterns.
 
 ## Backend API
 

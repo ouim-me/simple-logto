@@ -601,7 +601,8 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
  * Extracts JWT from cookies or Authorization header, verifies the token,
  * and returns authentication context.
  *
- * @param {NextRequest} request - Next.js request object
+ * @param {NextRequest} request - Next.js request-like object. Supports both middleware-style requests with `cookies.get()`
+ *   and App Router route-handler `Request` objects that only expose `headers.get()`.
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL
  * @param {string | string[]} [options.audience] - Expected token audience or audiences

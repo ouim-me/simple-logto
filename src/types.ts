@@ -23,6 +23,11 @@ export interface AuthOptions {
   navigationOptions?: NavigationOptions
 }
 
+export interface UsePermissionOptions {
+  claimKeys?: string[]
+  mode?: 'all' | 'any'
+}
+
 export interface AuthContextType {
   user: LogtoUser | null
   isLoadingUser: boolean

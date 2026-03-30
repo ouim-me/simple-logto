@@ -384,13 +384,17 @@
   >
   > Extended `src/backend/authorization.ts` with `hasRole(subject, role, { claimKeys })` and `requireRole(subject, role, { claimKeys })`, keeping the API framework-agnostic and aligned with the scope helpers from 10.1. The helpers accept `AuthPayload` or `AuthContext`, read `roles` first and `role` second by default, and allow custom claim names for tenants that map roles into namespaced claims. Added focused unit tests for array claims, string claims, custom claim keys, and error cases, and documented the default claim-shape assumptions plus the custom-claim override path in both backend docs surfaces.
 
-- [ ] **10.3 — Add a frontend permission helper** Conditional rendering against auth state should not require every consumer to re-parse permission data manually.
+- [x] **10.3 — Add a frontend permission helper** Conditional rendering against auth state should not require every consumer to re-parse permission data manually.
 
   > Consider a narrow `usePermission` hook only after the exact token/claim source is clear and stable in the frontend auth state.
+  >
+  > Added `src/usePermission.ts` as a narrow client-only hook that reads the existing `AuthProvider` user claims instead of inventing frontend access-token parsing. It defaults to `permissions`, then `scope`, then `scp`, supports `mode: 'all' | 'any'` plus custom `claimKeys`, is exported from the root entrypoint, returns `false` while auth is still loading to avoid gated-UI flicker, and is covered by focused unit tests plus README guidance that backend authorization should still use the server-side helpers.
 
-- [ ] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
+- [x] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
 
   > Add minimal fixture coverage for the documented React Router and/or Next.js SSR integration patterns so the examples are validated by CI instead of relying only on README maintenance.
+  >
+  > Added two packed smoke fixtures under `smoke-fixtures/`: `react-router` validates the documented `BrowserRouter` + `AuthProvider` + `customNavigate` pattern, and `next-app-router` validates the documented App Router split between client auth UI (`AuthProvider`, `SignInPage`, `CallbackPage`) and server verification via `verifyNextAuth` in a route handler. `scripts/run-packed-smoke-tests.mjs` now runs both fixtures so `npm run test:smoke` checks these examples against the packed tarball instead of trusting docs alone.
 
 ---
 
