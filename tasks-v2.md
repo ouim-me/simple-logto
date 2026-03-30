@@ -419,9 +419,10 @@
   > Remove `.npmrc.backup` if it is no longer intentionally needed, and tighten `.gitignore` rules for editor or backup artifacts if needed.
   > Removed the checked-in `.npmrc.backup` token placeholder and expanded `.gitignore` to keep common editor metadata and backup file suffixes out of the repository.
 
-- [ ] **11.4 — Add example applications** Real fixture apps improve adoption and reduce ambiguity in docs.
+- [x] **11.4 — Add example applications** Real fixture apps improve adoption and reduce ambiguity in docs.
 
   > Add small examples for at least React + backend verification and Next.js integration. These can later double as smoke-test fixtures.
+  > Documented the existing `example_app` as the React playground and backend-verification companion, and added a dedicated `examples/nextjs-app-router` example derived from the already-validated smoke fixture structure.
 
 <!-- - [ ] Skip this **11.5 — Add migration and integration guides if adoption grows** These are useful once the core package stabilizes. -->
 
