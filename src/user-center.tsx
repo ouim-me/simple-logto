@@ -68,7 +68,7 @@ export const UserCenter: React.FC<UserCenterProps> = ({
   globalSignOut = true,
   signoutCallbackUrl,
   additionalPages = [],
-  themeClassnames = 'dark:bg-[#171717] dark:text-slate-200 bg-white text-slate-900',
+  themeClassnames = 'light:bg-stone-800 light:border-stone-700 light:text-stone-200',
 }) => {
   const { user, isLoadingUser, signOut, signIn } = useAuth()
   const navigateTo = useNavigation()

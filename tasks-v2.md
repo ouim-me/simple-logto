@@ -13,6 +13,27 @@
 
 ---
 
+## Current Critical Regressions
+
+> These are active library-level issues confirmed after the initial hardening pass. They should be fixed before treating the package and example app as a reliable auth sandbox.
+
+**Priority: 🔴 Critical**
+
+- [ ] **CR-1 — Fix popup sign-in completion not rehydrating auth state in the parent app** Popup auth can complete successfully while `useAuth()` still reports `user: null` until the page is manually refreshed.
+
+  > Confirmed as a library issue in `src/context.tsx`. The popup completion handlers call `loadUserRef.current(true)`, but that path still depends on `useLogto()` already having flipped `isAuthenticated` in the parent window. When the popup closes before the parent Logto instance finishes rehydrating from shared storage, `loadUser()` falls through the unauthenticated branch and leaves the app signed out until a full reload reconstructs the provider.
+
+- [ ] **CR-2 — Fix local sign-out so `signOut({ global: false })` cannot cascade into tenant-wide logout** Consumers need a trustworthy app-local sign-out path that never logs them out of the entire Logto tenant as a side effect.
+  > Confirmed as a library issue in `src/context.tsx`. The local sign-out branch clears React state and cookies, but it does not establish a durable local-only signed-out state in the underlying Logto session. On subsequent auth re-sync, the provider can still see an SDK-authenticated session and enter error-driven global logout paths. The implementation needs a true local-session clearing strategy and regression tests proving `global: false` never invokes tenant-wide logout behavior.
+
+> User test: Local signout doesn't work at all, nor on userCenter or a dedicated sign-out function
+
+- [ ] **CR-3 — Make `UserCenter` sign-out defaults safe and explicit** A drop-in account menu should not globally log the user out of their whole identity-provider session unless they opt into that behavior.
+
+  > Confirmed as a library issue in `src/user-center.tsx`. `globalSignOut` currently defaults to `true`, so a consumer that renders `UserCenter` without extra props gets tenant-wide logout by default. That default is too risky for a shared UI primitive and should either change to local sign-out or become explicitly named/labeled so it cannot be mistaken for a normal app logout.
+
+---
+
 ## Phase 1 — Critical Packaging & Security Fixes
 
 > These were blocking issues affecting correctness, package quality, or security expectations for consumers.
