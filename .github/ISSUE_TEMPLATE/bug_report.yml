@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible problem in @ouim/simple-logto.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please provide a minimal reproduction and include the exact package version.
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Which `@ouim/simple-logto` version are you using?
+      placeholder: 0.1.8
+    validations:
+      required: true
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: Affected area
+      description: Which published entrypoint is involved?
+      options:
+        - @ouim/simple-logto
+        - @ouim/simple-logto/backend
+        - @ouim/simple-logto/bundler-config
+        - Multiple entrypoints
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and the user-visible impact.
+      placeholder: After upgrading, the callback route loops instead of finishing sign-in.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Include a small repo, gist, or exact steps to reproduce.
+      placeholder: |
+        1. Configure AuthProvider with ...
+        2. Visit /signin
+        3. Complete Logto sign-in
+        4. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The callback should finish sign-in and redirect to /dashboard.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include framework, runtime, browser, OS, and auth setup details that matter.
+      placeholder: |
+        - Node.js:
+        - React / Next.js / Vite:
+        - Browser:
+        - OS:
+        - Logto SDK version:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or failing output
+      description: Paste the shortest relevant output.
+      render: shell
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I checked the README and existing issues before filing this report.
+          required: true
+        - label: I can reproduce this on the latest release or current `rc` branch.
+          required: true

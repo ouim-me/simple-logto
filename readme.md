@@ -71,6 +71,11 @@ The package currently declares compatibility with:
 
 GitHub Actions runs the default validation gate on Node `24`, which is the current Active LTS line as of March 29, 2026. The published `engines` field expresses the broader compatibility policy, while CI stays intentionally lighter for day-to-day pull requests.
 
+## Examples
+
+- [example_app/README.md](./example_app/README.md) contains the Vite React playground plus an Express backend-verification sample under [example_app/server/README.md](./example_app/server/README.md).
+- [examples/nextjs-app-router/README.md](./examples/nextjs-app-router/README.md) shows a small Next.js App Router integration with `AuthProvider`, callback/sign-in routes, and `verifyNextAuth`.
+
 ## Quick Start
 
 ### 1. Wrap your app

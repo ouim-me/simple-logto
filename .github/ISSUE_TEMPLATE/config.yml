@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/thezem/simple-logto/security/policy
+    about: Please report security vulnerabilities through the security policy instead of public issues.

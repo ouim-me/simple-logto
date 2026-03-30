@@ -38,7 +38,7 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", ".next"],
+  "ignorePatterns": ["dist", "node_modules", ".next", "**/next-env.d.ts"],
   "settings": {
     "react": {
       "version": "detect"

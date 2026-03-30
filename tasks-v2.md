@@ -404,22 +404,26 @@
 
 **Priority: 🟢 Low**
 
-- [ ] **11.1 — Add GitHub issue and PR templates** Improve contribution quality and reduce repetitive triage.
+- [x] **11.1 — Add GitHub issue and PR templates** Improve contribution quality and reduce repetitive triage.
 
   > Add at least a bug report template, feature request template, and pull request template aligned with the repo’s release and testing expectations.
+  > Added structured bug and feature request issue forms, disabled blank issues, and added a PR template that points contributors at the full local CI gate and the required `rc` base branch.
 
-- [ ] **11.2 — Update Vite to a supported major version** The repo should not sit on stale build tooling longer than necessary.
+- [x] **11.2 — Update Vite to a supported major version** The repo should not sit on stale build tooling longer than necessary.
 
   > Upgrade from Vite 4, run the full CI gate, and verify the generated library output and `bundler-config` helpers still behave correctly.
+  > Upgraded the library build to Vite 6.4.1 instead of Vite 7/8 to preserve the package's current Node 18 support policy, then ran the full local CI gate successfully (`lint`, type-check, tests, build, size, package audit, and smoke fixtures).
 
-- [ ] **11.3 — Remove leftover repo artifacts** Source control should not keep irrelevant backup files.
+- [x] **11.3 — Remove leftover repo artifacts** Source control should not keep irrelevant backup files.
 
   > Remove `.npmrc.backup` if it is no longer intentionally needed, and tighten `.gitignore` rules for editor or backup artifacts if needed.
+  > Removed the checked-in `.npmrc.backup` token placeholder and expanded `.gitignore` to keep common editor metadata and backup file suffixes out of the repository.
 
-- [ ] **11.4 — Add example applications** Real fixture apps improve adoption and reduce ambiguity in docs.
+- [x] **11.4 — Add example applications** Real fixture apps improve adoption and reduce ambiguity in docs.
 
   > Add small examples for at least React + backend verification and Next.js integration. These can later double as smoke-test fixtures.
+  > Documented the existing `example_app` as the React playground and backend-verification companion, and added a dedicated `examples/nextjs-app-router` example derived from the already-validated smoke fixture structure.
 
-- [ ] **11.5 — Add migration and integration guides if adoption grows** These are useful once the core package stabilizes.
+<!-- - [ ] Skip this **11.5 — Add migration and integration guides if adoption grows** These are useful once the core package stabilizes. -->
 
-  > Candidates include migration from raw `@logto/react`, React Router integration, Next.js App Router integration, and guest-mode guidance. Do this after the base API and release process settle.
+> Candidates include migration from raw `@logto/react`, React Router integration, Next.js App Router integration, and guest-mode guidance. Do this after the base API and release process settle.

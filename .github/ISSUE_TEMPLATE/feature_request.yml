@@ -1,0 +1,57 @@
+name: Feature request
+description: Propose an improvement to @ouim/simple-logto.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the use case first. Requests tied to a clear integration problem are easier to evaluate than API sketches alone.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What integration pain or gap are you hitting today?
+      placeholder: We need a supported way to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the API, behavior, or documentation change you want.
+      placeholder: Add a helper that ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: List workarounds, related packages, or rejected approaches.
+  - type: dropdown
+    id: breaking-change
+    attributes:
+      label: Does this require a breaking change?
+      options:
+        - No
+        - Possibly
+        - Yes
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: adoption
+    attributes:
+      label: Target integration
+      description: Mention the framework or stack involved.
+      placeholder: React Router SPA, Next.js App Router route handlers, Express API, etc.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I checked the README, existing issues, and current roadmap before filing this request.
+          required: true
