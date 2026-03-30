@@ -346,7 +346,7 @@ export interface CsrfVerifyResult {
 export function verifyCsrfToken(request: NextRequest, options: { cookieName?: string; headerName?: string } = {}): CsrfVerifyResult {
   const { cookieName = CSRF_COOKIE_NAME, headerName = CSRF_HEADER_NAME } = options
 
-  const cookieToken = request.cookies.get(cookieName)?.value
+  const cookieToken = request.cookies?.get(cookieName)?.value
   const headerToken = request.headers.get(headerName)
 
   if (!cookieToken) {

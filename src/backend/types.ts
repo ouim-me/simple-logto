@@ -50,7 +50,7 @@ export type ExpressNext = (err?: unknown) => void
 
 // Next.js types
 export interface NextRequest {
-  cookies: {
+  cookies?: {
     get: (name: string) => { value: string } | undefined
   }
   headers: {

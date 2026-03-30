@@ -408,6 +408,8 @@ export default function Callback() {
 
 For protected server routes, route handlers, or middleware, import from `@ouim/simple-logto/backend` instead of trying to read frontend auth state during SSR.
 
+These React Router and Next.js examples are mirrored by packed smoke fixtures in `smoke-fixtures/` so CI catches export or packaging drift against the documented integration patterns.
+
 ## Backend API
 
 Import backend helpers from the dedicated subpath:

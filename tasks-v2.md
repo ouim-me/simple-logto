@@ -390,9 +390,11 @@
   >
   > Added `src/usePermission.ts` as a narrow client-only hook that reads the existing `AuthProvider` user claims instead of inventing frontend access-token parsing. It defaults to `permissions`, then `scope`, then `scp`, supports `mode: 'all' | 'any'` plus custom `claimKeys`, is exported from the root entrypoint, returns `false` while auth is still loading to avoid gated-UI flicker, and is covered by focused unit tests plus README guidance that backend authorization should still use the server-side helpers.
 
-- [ ] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
+- [x] **10.4 — Add executable SSR integration fixtures for documented auth flows** The new SSR/router guidance is still documentation-only and could drift over time.
 
   > Add minimal fixture coverage for the documented React Router and/or Next.js SSR integration patterns so the examples are validated by CI instead of relying only on README maintenance.
+  >
+  > Added two packed smoke fixtures under `smoke-fixtures/`: `react-router` validates the documented `BrowserRouter` + `AuthProvider` + `customNavigate` pattern, and `next-app-router` validates the documented App Router split between client auth UI (`AuthProvider`, `SignInPage`, `CallbackPage`) and server verification via `verifyNextAuth` in a route handler. `scripts/run-packed-smoke-tests.mjs` now runs both fixtures so `npm run test:smoke` checks these examples against the packed tarball instead of trusting docs alone.
 
 ---
 

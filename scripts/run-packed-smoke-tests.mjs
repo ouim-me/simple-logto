@@ -20,6 +20,20 @@ const fixtures = [
     ],
   },
   {
+    name: 'react-router',
+    checks: [
+      ['run', 'typecheck'],
+      ['run', 'build'],
+    ],
+  },
+  {
+    name: 'next-app-router',
+    checks: [
+      ['run', 'typecheck'],
+      ['run', 'build'],
+    ],
+  },
+  {
     name: 'node-backend',
     checks: [
       ['run', 'typecheck'],
