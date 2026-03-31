@@ -147,11 +147,11 @@ The publish workflow blocks until vulnerabilities are resolved. Options:
 
 ## Release Workflow (`.github/workflows/publish.yml`)
 
-Automatically publishes to npm when a release is created.
+Automatically publishes to npm when a GitHub release is published.
 
 ### How It Works
 
-1. **Trigger:** Create a new GitHub Release
+1. **Trigger:** Publish a GitHub Release
 2. **Validate:** Run full CI (lint, test, build)
 3. **Audit:** Check for security vulnerabilities
 4. **Publish:** Push to npm with build provenance
@@ -190,12 +190,27 @@ Automatically publishes to npm when a release is created.
    - Tag: `v0.1.9`
    - Title: `v0.1.9 — Description`
    - Copy CHANGELOG entries into the description
-   - Click **Publish release**
+   - Save as draft if you do not want npm publication yet
+   - Click **Publish release** only when you want the npm publish workflow to run
 
 4. **Workflow runs:**
    - Validates the code
    - Publishes to npm
    - Archives build artifacts as GitHub release assets
+
+### Rename-Specific Release Order
+
+For the `@ouim/simple-logto` -> `@ouim/logto-authkit` transition:
+
+1. Merge the final old-name messaging PR.
+2. Tag `v0.2.1`.
+3. Create `v0.2.1` as a draft GitHub release.
+4. Merge the rename PR.
+5. Tag `v0.3.0`.
+6. Publish the `v0.3.0` release first so `@ouim/logto-authkit` reaches npm first.
+7. Verify the new package is live.
+8. Publish `v0.2.1` only after that if the final old-name line should also be shipped.
+9. Deprecate `@ouim/simple-logto` on npm after the new package is confirmed live.
 
 ### Build Provenance
 

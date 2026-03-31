@@ -1,5 +1,9 @@
 'use client'
 
+import { warnPackageDeprecation } from './deprecation-warning.js'
+
+warnPackageDeprecation('root')
+
 export { AuthProvider } from './context.js'
 export { useAuth } from './useAuth.js'
 export { usePermission } from './usePermission.js'

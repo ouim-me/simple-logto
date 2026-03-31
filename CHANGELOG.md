@@ -9,6 +9,22 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-03-31
+
+### Changed
+- Added a migration notice for the upcoming package move from `@ouim/simple-logto` to `@ouim/logto-authkit`
+- Documented that `@ouim/simple-logto/backend` will become `@ouim/logto-authkit/server`
+- Confirmed `@ouim/simple-logto/bundler-config` will move to `@ouim/logto-authkit/bundler-config`
+- Confirmed there will be no compatibility shim for the old `/backend` subpath
+
+### Release Notes
+- This is the final old-name line before the rename release.
+- The planned follow-up release is `@ouim/logto-authkit`.
+- Recommended migration mapping:
+  - `@ouim/simple-logto` -> `@ouim/logto-authkit`
+  - `@ouim/simple-logto/backend` -> `@ouim/logto-authkit/server`
+  - `@ouim/simple-logto/bundler-config` -> `@ouim/logto-authkit/bundler-config`
+
 ### Added
 - GitHub Actions CI workflow (single Node 24 job: lint → type-check → test → build)
 - GitHub Actions automated npm publish workflow with provenance
@@ -63,3 +79,4 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 [Unreleased]: https://github.com/ouim-me/simple-logto/compare/v0.1.8...HEAD
 [0.1.8]: https://github.com/ouim-me/simple-logto/releases/tag/v0.1.8
+[0.2.1]: https://github.com/ouim-me/simple-logto/releases/tag/v0.2.1

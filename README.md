@@ -2,6 +2,14 @@
 
 `@ouim/simple-logto` is a batteries-included auth toolkit for Logto-powered React apps.
 
+> Migration notice
+> This package is scheduled to move to `@ouim/logto-authkit`.
+> Planned import replacements:
+> `@ouim/simple-logto` -> `@ouim/logto-authkit`
+> `@ouim/simple-logto/backend` -> `@ouim/logto-authkit/server`
+> `@ouim/simple-logto/bundler-config` -> `@ouim/logto-authkit/bundler-config`
+> There will be no compatibility shim for `/backend`.
+
 It wraps `@logto/react` with the pieces most teams end up building anyway:
 
 - a higher-level React provider and hook

@@ -1,6 +1,10 @@
 // Configuration helper for resolving jose library issues
 // This can be imported and used in consuming project's bundler configuration
 
+import { warnPackageDeprecation } from './deprecation-warning.js'
+
+warnPackageDeprecation('bundler-config')
+
 interface BundlerConfig {
   optimizeDeps?: {
     include: string[]

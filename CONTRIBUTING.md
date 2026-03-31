@@ -91,10 +91,10 @@ There is no local Git hook enforcement in this repository. Conventional Commits 
 
 ## Pull Request Process
 
-1. **Branch off `rc`** — `master` receives merges only from `rc` at release time.
+1. **Branch off `master`** unless a maintainer tells you otherwise.
    ```bash
-   git checkout rc
-   git pull origin rc
+   git checkout master
+   git pull origin master
    git checkout -b feat/my-feature
    ```
 2. **Write tests** for any new functionality or bug fix.
@@ -102,7 +102,7 @@ There is no local Git hook enforcement in this repository. Conventional Commits 
    ```bash
    npm run lint && npx tsc --project tsconfig.build.json --noEmit && npx vitest run && npm run build && npm run test:size && npm run test:package && npm run test:smoke
    ```
-4. **Open a PR against `rc`** — not `master`.
+4. **Open a PR against `master`**.
 5. Ensure the GitHub Actions **CI** workflow passes (the Node 24 validation job, including bundle-size and package-audit checks, must be green).
 6. Request a review from a maintainer. At least **one approval** is required before merge.
 7. PRs are merged with **Squash and Merge** to keep a clean linear history on `rc`.
@@ -124,6 +124,24 @@ The following rules are enforced in GitHub repository settings (Settings → Bra
 | Restrict who can push directly | Maintainers only |
 | Allow force pushes | ❌ Disabled |
 | Allow deletions | ❌ Disabled |
+
+---
+
+## Rename Release Sequence
+
+For the `@ouim/simple-logto` -> `@ouim/logto-authkit` migration, use this release order:
+
+1. Merge the final old-name messaging PR to `master`.
+2. Tag `v0.2.1`.
+3. Create the `v0.2.1` GitHub release as a draft and do not publish it yet.
+4. Merge the rename PR to `master`.
+5. Tag `v0.3.0`.
+6. Publish the `v0.3.0` GitHub release first so the new package reaches npm first.
+7. Verify `@ouim/logto-authkit` is live.
+8. Publish the drafted `v0.2.1` release if the final old-name release should also be pushed to npm.
+9. Deprecate `@ouim/simple-logto` on npm after the new package is confirmed live.
+
+This repository publishes to npm from the GitHub `release.published` event, not from a git tag push by itself.
 
 ### `rc` (release candidate)
 
