@@ -1,6 +1,6 @@
 {
   "name": "@ouim/logto-authkit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A Logto auth kit with prebuilt React UI, hooks, server verification, and bundler helpers",
   "type": "module",
   "main": "dist/index.js",
