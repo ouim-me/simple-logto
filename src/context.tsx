@@ -4,6 +4,7 @@ import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
 import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils.js'
 import { NavigationProvider } from './navigation.js'
 import type {
+  AuthCookieOptions,
   AuthContextType,
   AuthErrorEvent,
   AuthProviderProps,
@@ -145,6 +146,7 @@ const InternalAuthProvider = ({
   callbackUrl,
   enablePopupSignIn,
   logtoConfig,
+  authCookie,
   onTokenRefresh,
   onAuthError,
   onSignOut,
@@ -153,6 +155,7 @@ const InternalAuthProvider = ({
   callbackUrl?: string
   enablePopupSignIn?: boolean
   logtoConfig: LogtoConfig // Logto configuration object
+  authCookie?: AuthCookieOptions
   onTokenRefresh?: (event: AuthTokenRefreshEvent) => void
   onAuthError?: (event: AuthErrorEvent) => void
   onSignOut?: (event: AuthSignOutEvent) => void
@@ -246,6 +249,25 @@ const InternalAuthProvider = ({
       console.error('Error in AuthProvider onTokenRefresh callback:', callbackError)
     }
   }, [])
+
+  const saveAuthCookie = useCallback(
+    (token: string) => {
+      if (authCookie) {
+        jwtCookieUtils.saveToken(token, authCookie)
+      } else {
+        jwtCookieUtils.saveToken(token)
+      }
+    },
+    [authCookie],
+  )
+
+  const removeAuthCookie = useCallback(() => {
+    if (authCookie) {
+      jwtCookieUtils.removeToken(authCookie)
+    } else {
+      jwtCookieUtils.removeToken()
+    }
+  }, [authCookie])
 
   const clearTrackedAccessToken = useCallback(() => {
     lastAccessTokenRef.current = undefined
@@ -355,7 +377,7 @@ const InternalAuthProvider = ({
       if (isAuthenticated) {
         if (localSignOutRef.current) {
           setUser(null)
-          jwtCookieUtils.removeToken()
+          removeAuthCookie()
           clearTrackedAccessToken()
           errorCount.current = 0
           transientErrorCount.current = 0
@@ -376,7 +398,7 @@ const InternalAuthProvider = ({
             const tokenExp = getJwtExpiration(jwt)
             const previousToken = lastAccessTokenRef.current
             const previousExpiresAt = lastAccessTokenExpRef.current
-            jwtCookieUtils.saveToken(jwt)
+            saveAuthCookie(jwt)
             setUser(nextUser)
             // Reset all error counters and any pending backoff on a successful fetch
             errorCount.current = 0
@@ -394,21 +416,21 @@ const InternalAuthProvider = ({
             }
             scheduleTokenRefresh(tokenExp)
           } else {
-            // Refresh token expired (e.g. user was gone > 30 days) — session is dead.
-            // The Logto SDK still reports isAuthenticated=true because it reads stale
-            // localStorage, but we have no usable token, so we must log out cleanly.
-            const authError = new Error('Access token unavailable — session likely expired. Forcing logout.')
+            // A missing API access token is not definitive proof that the hosted
+            // Logto browser session is dead. Resource mismatch, consent issues,
+            // or temporary token endpoint problems can produce null here while
+            // ID claims still identify the user.
+            const authError = new Error('Access token unavailable. Keeping user session active while API token sync is degraded.')
             console.warn(authError.message)
             emitAuthError({
               error: authError,
               isTransient: false,
-              willSignOut: true,
+              willSignOut: false,
             })
-            setUser(null)
-            jwtCookieUtils.removeToken()
+            setUser(transformUser(claims))
+            removeAuthCookie()
             resetRefreshSchedule()
             clearTrackedAccessToken()
-            await performGlobalSignOut('missing_access_token', authError)
           }
         } catch (error: unknown) {
           console.error('Error fetching user claims:', error)
@@ -481,30 +503,21 @@ const InternalAuthProvider = ({
                 }
               }, backoffMs)
             } else {
-              // All retries exhausted — the network failure is sustained long enough that
-              // we can no longer guarantee the session is still valid. Sign the user out
-              // cleanly so the UI reaches a known, non-ambiguous state.
-              console.warn('Max transient error retries exceeded. Signing out to reset to a clean state.')
-              setUser(null)
-              jwtCookieUtils.removeToken()
-              transientErrorCount.current = 0
-              resetRefreshSchedule()
-              clearTrackedAccessToken()
-              try {
-                await performGlobalSignOut('transient_error_limit', normalizedError)
-              } catch (logoutError) {
-                console.error('Error during forced logout after transient retry exhaustion:', logoutError)
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('auth-state-changed'))
+              console.warn('Max transient auth retries exceeded. Keeping current user session and retrying slowly.')
+              transientErrorCount.current = MAX_TRANSIENT_ERRORS
+              clearTimeout(backoffTimerRef.current)
+              backoffTimerRef.current = setTimeout(() => {
+                if (!isUnmountedRef.current) {
+                  loadUserRef.current(true)
                 }
-              }
+              }, 60000)
             }
           } else {
             // ─── Auth error path ─────────────────────────────────────────────────
             // The session is genuinely invalid. Clear local state and sign out.
             clearTimeout(backoffTimerRef.current)
             setUser(null)
-            jwtCookieUtils.removeToken()
+            removeAuthCookie()
             resetRefreshSchedule()
             errorCount.current += 1
             transientErrorCount.current = 0
@@ -555,7 +568,7 @@ const InternalAuthProvider = ({
 
         setUser(null)
         // Remove token cookie when not authenticated
-        jwtCookieUtils.removeToken()
+        removeAuthCookie()
         clearTrackedAccessToken()
         // Reset all error counts when transitioning to unauthenticated state
         errorCount.current = 0
@@ -577,7 +590,9 @@ const InternalAuthProvider = ({
       isAuthenticated,
       isLoading,
       performGlobalSignOut,
+      removeAuthCookie,
       resetRefreshSchedule,
+      saveAuthCookie,
       scheduleTokenRefresh,
       setLocalSignOutState,
     ],
@@ -799,7 +814,7 @@ const InternalAuthProvider = ({
       const { callbackUrl, global = true } = options || {}
 
       // Always remove the JWT token cookie on sign out
-      jwtCookieUtils.removeToken()
+      removeAuthCookie()
       resetRefreshSchedule()
       clearTrackedAccessToken()
       clearPopupAuthRetry()
@@ -832,7 +847,7 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, resetRefreshSchedule, setLocalSignOutState],
+    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, removeAuthCookie, resetRefreshSchedule, setLocalSignOutState],
   )
 
   const value: AuthContextType = useMemo(
@@ -899,6 +914,7 @@ export const AuthProvider = ({
   callbackUrl,
   customNavigate,
   enablePopupSignIn = false,
+  authCookie,
   onTokenRefresh,
   onAuthError,
   onSignOut,
@@ -943,6 +959,7 @@ export const AuthProvider = ({
             logtoConfig={config}
             callbackUrl={callbackUrl}
             enablePopupSignIn={enablePopupSignIn}
+            authCookie={authCookie}
             onTokenRefresh={onTokenRefresh}
             onAuthError={onAuthError}
             onSignOut={onSignOut}

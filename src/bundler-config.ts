@@ -1,5 +1,5 @@
-// Configuration helper for resolving jose library issues
-// This can be imported and used in consuming project's bundler configuration
+// Configuration helper for Logto-related bundler setup.
+// This can be imported and used in consuming project's bundler configuration.
 
 interface BundlerConfig {
   optimizeDeps?: {
@@ -14,9 +14,9 @@ interface BundlerConfig {
 /**
  * Bundler Configuration Helper
  *
- * Returns bundler-specific configuration to resolve the jose library correctly.
- * The jose library has different import paths for different environments, and bundlers
- * need proper configuration to handle these correctly.
+ * Returns bundler-specific configuration for consumers that need a small amount of
+ * dependency pre-bundling help. We intentionally do not alias jose: modern jose
+ * versions expose supported package exports and deep CJS aliases are brittle.
  *
  * @param {'vite' | 'webpack' | 'nextjs'} [bundler='vite'] - Target bundler type
  *
@@ -51,10 +51,6 @@ interface BundlerConfig {
  * };
  */
 export const getBundlerConfig = (bundler: 'vite' | 'webpack' | 'nextjs' = 'vite'): BundlerConfig => {
-  const joseAlias = {
-    jose: 'jose/dist/node/cjs',
-  }
-
   switch (bundler) {
     case 'vite':
       return {
@@ -62,7 +58,7 @@ export const getBundlerConfig = (bundler: 'vite' | 'webpack' | 'nextjs' = 'vite'
           include: ['@logto/react'],
         },
         resolve: {
-          alias: joseAlias,
+          alias: {},
         },
       }
 
@@ -70,12 +66,12 @@ export const getBundlerConfig = (bundler: 'vite' | 'webpack' | 'nextjs' = 'vite'
     case 'nextjs':
       return {
         resolve: {
-          alias: joseAlias,
+          alias: {},
         },
       }
 
     default:
-      return { alias: joseAlias }
+      return { alias: {} }
   }
 }
 

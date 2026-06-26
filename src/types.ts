@@ -65,9 +65,20 @@ export interface AuthProviderProps {
   callbackUrl?: string
   customNavigate?: (url: string, options?: NavigationOptions) => void
   enablePopupSignIn?: boolean
+  authCookie?: AuthCookieOptions
   onTokenRefresh?: (event: AuthTokenRefreshEvent) => void
   onAuthError?: (event: AuthErrorEvent) => void
   onSignOut?: (event: AuthSignOutEvent) => void
+}
+
+export interface AuthCookieOptions {
+  cookieName?: string
+  expires?: Date | number
+  maxAge?: number
+  domain?: string
+  path?: string
+  secure?: boolean
+  sameSite?: 'strict' | 'lax' | 'none'
 }
 
 export interface CallbackPageProps {

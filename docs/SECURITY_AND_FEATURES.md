@@ -64,7 +64,7 @@ All authentication and guest identity cookies now use consistent security flags:
 
 - **`Secure`** — Only transmitted over HTTPS
 - **`SameSite=Strict`** — Not sent on cross-origin requests (prevents CSRF + some XSS vectors)
-- **Expiry** — 7 days for tokens, with server-side verification of expiry
+- **Expiry** — 30-day default cookie retention, with server-side verification of the JWT `exp` claim
 
 ```javascript
 // Frontend (non-HttpOnly, JavaScript-readable)
