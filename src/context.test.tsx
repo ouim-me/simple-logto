@@ -438,7 +438,7 @@ describe('Proactive Token Refresh', () => {
     errorSpy.mockRestore()
   }, 10000)
 
-  it('falls back to logout when refresh returns no access token, indicating an expired refresh token', async () => {
+  it('keeps the user signed in when refresh returns no access token', async () => {
     const initialExp = Math.floor(Date.now() / 1000) + 61
     const getIdTokenClaims = vi
       .fn()
@@ -456,6 +456,7 @@ describe('Proactive Token Refresh', () => {
       })
     const getAccessToken = vi.fn().mockResolvedValueOnce(createMockJwt(initialExp)).mockResolvedValueOnce(null)
     const signOut = vi.fn()
+    const onAuthError = vi.fn()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     vi.mocked(useLogto).mockReturnValue(
@@ -468,16 +469,23 @@ describe('Proactive Token Refresh', () => {
     )
 
     render(
-      <AuthProvider config={mockConfig}>
+      <AuthProvider config={mockConfig} onAuthError={onAuthError}>
         <AuthStateProbe />
       </AuthProvider>,
     )
 
     await waitFor(() => expect(screen.getByText('user: user-123')).toBeInTheDocument())
 
-    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    await waitFor(() => expect(getAccessToken).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    expect(signOut).not.toHaveBeenCalled()
+    expect(screen.getByText('user: user-123')).toBeInTheDocument()
     expect(jwtCookieUtils.removeToken).toHaveBeenCalled()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('session likely expired'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Access token unavailable'))
+    expect(onAuthError).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: expect.stringContaining('Access token unavailable') }),
+      isTransient: false,
+      willSignOut: false,
+    })
 
     warnSpy.mockRestore()
   }, 10000)

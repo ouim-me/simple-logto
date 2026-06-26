@@ -452,6 +452,63 @@ describe('JWT Verification Logic', () => {
 
       await expect(verifyLogtoToken(mockToken, optionsWithScope)).rejects.toThrow('Missing required scope')
     })
+
+    it('should reject substring scope matches', async () => {
+      const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+      ;(global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          keys: [
+            {
+              kid: 'test-kid',
+              kty: 'RSA',
+              n: 'test-n',
+              e: 'AQAB',
+            },
+          ],
+        }),
+      })
+
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-123',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          scope: 'bread:user',
+        },
+      })
+
+      await expect(verifyLogtoToken(mockToken, { ...mockOptions, requiredScope: 'read:user' })).rejects.toThrow('Missing required scope')
+    })
+
+    it('should support multiple required scopes with any mode', async () => {
+      const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIn0.payload.signature'
+      ;(global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ keys: [{ kid: 'test-kid', kty: 'RSA', n: 'test-n', e: 'AQAB' }] }),
+      })
+
+      const { jwtVerify } = await import('jose')
+      ;(jwtVerify as any).mockResolvedValueOnce({
+        payload: {
+          sub: 'user-123',
+          iss: 'https://test.logto.app/oidc',
+          aud: 'urn:logto:resource:api',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          scope: 'read:user',
+        },
+      })
+
+      const result = await verifyLogtoToken(mockToken, {
+        ...mockOptions,
+        requiredScopes: ['admin:user', 'read:user'],
+        scopeMode: 'any',
+      })
+
+      expect(result.isAuthenticated).toBe(true)
+    })
   })
 
   describe('Successful Token Verification', () => {
@@ -676,6 +733,29 @@ describe('JWT Verification Logic', () => {
             iss: 'https://test.logto.app/oidc',
             aud: 'urn:logto:resource:api',
             exp: now - 1, // one second in the past → expired
+          },
+        })
+
+        await expect(verifyLogtoToken(mockToken, mockOptions)).rejects.toThrow(/expired/)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('should reject a token with exp exactly equal to now', async () => {
+      vi.useFakeTimers()
+      try {
+        const nowMs = Date.now()
+        vi.setSystemTime(nowMs)
+        const now = Math.floor(nowMs / 1000)
+        ;(global.fetch as any).mockResolvedValueOnce(edgeCaseMockJwks)
+        const { jwtVerify } = await import('jose')
+        ;(jwtVerify as any).mockResolvedValueOnce({
+          payload: {
+            sub: 'user-exp-now',
+            iss: 'https://test.logto.app/oidc',
+            aud: 'urn:logto:resource:api',
+            exp: now,
           },
         })
 

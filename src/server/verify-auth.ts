@@ -1,5 +1,6 @@
 import { importJWK, jwtVerify } from 'jose'
 import type { AuthContext, AuthPayload, VerifyAuthOptions, ExpressRequest, ExpressResponse, ExpressNext, NextRequest } from './types.js'
+import { hasScopes } from './authorization.js'
 /**
  * Express middleware for Logto authentication
  */
@@ -219,7 +220,7 @@ function findMatchingKey(keys: JwkKey[], kid?: string, alg?: string): JwkKey {
  * Manually verify JWT token claims
  */
 function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): void {
-  const { logtoUrl, audience, requiredScope } = options
+  const { logtoUrl, audience, requiredScope, requiredScopes, scopeMode = 'all' } = options
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined
   const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
@@ -249,7 +250,7 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
 
   // Use `!== undefined` (not a truthy check) so that exp/nbf === 0 is correctly
   // treated as an expired / not-yet-valid token rather than being silently skipped.
-  if (exp !== undefined && exp < now) {
+  if (exp !== undefined && exp <= now) {
     throw new Error('Token has expired')
   }
 
@@ -257,9 +258,15 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
     throw new Error('Token is not yet valid')
   }
 
-  // Verify required scope
-  if (requiredScope && (!payload.scope || !payload.scope.includes(requiredScope))) {
-    throw new Error(`Missing required scope: ${requiredScope}`)
+  // Verify required scopes using exact OAuth scope-token matching, not substring checks.
+  const scopeRequirements = [requiredScope, ...(Array.isArray(requiredScopes) ? requiredScopes : requiredScopes ? [requiredScopes] : [])].filter(
+    (scope): scope is string => typeof scope === 'string' && scope.trim() !== '',
+  )
+  if (scopeRequirements.length > 0 && !hasScopes(payload, scopeRequirements, { mode: scopeMode })) {
+    if (requiredScope && !requiredScopes) {
+      throw new Error(`Missing required scope: ${requiredScope}`)
+    }
+    throw new Error(`Missing required scopes (${scopeMode}: ${scopeRequirements.join(', ')})`)
   }
 }
 
@@ -403,7 +410,9 @@ async function verifyWithKeys(
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL (e.g., 'https://tenant.logto.app')
  * @param {string | string[]} [options.audience] - Expected token audience or audiences (resource/API identifier)
- * @param {string} [options.requiredScope] - Required scope that must be present in token
+ * @param {string} [options.requiredScope] - Required exact OAuth scope that must be present in token
+ * @param {string | string[]} [options.requiredScopes] - Required exact OAuth scopes; use `scopeMode` to require all or any
+ * @param {'all' | 'any'} [options.scopeMode='all'] - Multi-scope matching mode
  * @param {string} [options.cookieName] - Cookie name for token storage (default: 'logto_authtoken')
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
  * @param {number} [options.jwksCacheTtlMs=300000] - How long to cache fetched JWKS keys in memory per process
@@ -474,7 +483,9 @@ export async function verifyLogtoToken(token: string, options: VerifyAuthOptions
  * @param {VerifyAuthOptions} options - Middleware configuration options
  * @param {string} options.logtoUrl - Logto server URL
  * @param {string | string[]} [options.audience] - Expected token audience or audiences
- * @param {string} [options.requiredScope] - Required scope
+ * @param {string} [options.requiredScope] - Required exact OAuth scope
+ * @param {string | string[]} [options.requiredScopes] - Required exact OAuth scopes; use `scopeMode` to require all or any
+ * @param {'all' | 'any'} [options.scopeMode='all'] - Multi-scope matching mode
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name for token
  * @param {boolean} [options.allowGuest=false] - Allow unauthenticated access as guest
  *
@@ -606,7 +617,9 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL
  * @param {string | string[]} [options.audience] - Expected token audience or audiences
- * @param {string} [options.requiredScope] - Required scope
+ * @param {string} [options.requiredScope] - Required exact OAuth scope
+ * @param {string | string[]} [options.requiredScopes] - Required exact OAuth scopes; use `scopeMode` to require all or any
+ * @param {'all' | 'any'} [options.scopeMode='all'] - Multi-scope matching mode
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
  *
@@ -749,7 +762,9 @@ export async function verifyNextAuth(
  * @param {VerifyAuthOptions} options - Verification options
  * @param {string} options.logtoUrl - Logto server URL
  * @param {string | string[]} [options.audience] - Expected token audience or audiences
- * @param {string} [options.requiredScope] - Required scope
+ * @param {string} [options.requiredScope] - Required exact OAuth scope
+ * @param {string | string[]} [options.requiredScopes] - Required exact OAuth scopes; use `scopeMode` to require all or any
+ * @param {'all' | 'any'} [options.scopeMode='all'] - Multi-scope matching mode
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name
  * @param {boolean} [options.allowGuest] - Allow unauthenticated guest access
  *
@@ -854,7 +869,7 @@ export async function verifyAuth(
  * @param {object} [options]
  * @param {string} [options.cookieName='logto_authtoken'] - Cookie name. Must match the
  *   `cookieName` used by the backend middleware so it finds the token on subsequent requests.
- * @param {number} [options.maxAge=604800] - Cookie lifetime in **seconds** (default: 7 days).
+ * @param {number} [options.maxAge=2592000] - Cookie lifetime in **seconds** (default: 30 days).
  * @param {string} [options.domain] - Cookie domain (omit to use the current host).
  * @param {string} [options.path='/'] - Cookie path.
  * @param {'Strict'|'Lax'|'None'} [options.sameSite='Strict'] - SameSite policy.
@@ -900,7 +915,7 @@ export function buildAuthCookieHeader(
 ): string {
   const {
     cookieName = 'logto_authtoken',
-    maxAge = 7 * 24 * 60 * 60, // 7 days in seconds
+    maxAge = 30 * 24 * 60 * 60, // 30 days in seconds
     domain,
     path = '/',
     sameSite = 'Strict',

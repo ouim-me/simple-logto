@@ -5,7 +5,7 @@
  *   - getBundlerConfig() returns the expected shape for each bundler target
  *   - No stale @ouim/better-logto-react package name is present
  *   - The vite config includes @logto/react (current name) in optimizeDeps
- *   - The jose alias points to the correct CJS path in all configs
+ *   - No brittle jose deep-import alias is emitted
  *   - Pre-built named exports (viteConfig, webpackConfig, nextjsConfig) match
  *     their corresponding getBundlerConfig() call
  */
@@ -15,7 +15,6 @@ import { getBundlerConfig, viteConfig, webpackConfig, nextjsConfig } from './bun
 
 const STALE_PACKAGE_NAME = '@ouim/better-logto-react'
 const CURRENT_PACKAGE_NAME = '@logto/react'
-const JOSE_ALIAS_VALUE = 'jose/dist/node/cjs'
 
 describe('getBundlerConfig — vite', () => {
   it('should return an object with optimizeDeps and resolve keys', () => {
@@ -35,9 +34,9 @@ describe('getBundlerConfig — vite', () => {
     expect(serialised).not.toContain(STALE_PACKAGE_NAME)
   })
 
-  it('should set the jose alias to its CJS distribution path', () => {
+  it('should not alias jose to an unsupported deep CJS path', () => {
     const config = getBundlerConfig('vite')
-    expect(config.resolve?.alias).toMatchObject({ jose: JOSE_ALIAS_VALUE })
+    expect(JSON.stringify(config)).not.toContain('jose/dist/node/cjs')
   })
 
   it('should default to vite config when no bundler argument is passed', () => {
@@ -58,9 +57,9 @@ describe('getBundlerConfig — webpack', () => {
     expect(config).not.toHaveProperty('optimizeDeps')
   })
 
-  it('should set the jose alias to its CJS distribution path', () => {
+  it('should not alias jose to an unsupported deep CJS path', () => {
     const config = getBundlerConfig('webpack')
-    expect(config.resolve?.alias).toMatchObject({ jose: JOSE_ALIAS_VALUE })
+    expect(JSON.stringify(config)).not.toContain('jose/dist/node/cjs')
   })
 
   it('should NOT include the stale package name', () => {

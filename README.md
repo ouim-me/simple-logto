@@ -541,14 +541,15 @@ const auth = await verifyAuth('your-jwt-token', {
 - `logtoUrl`: required
 - `audience`: required for protected API resources, accepts either a single audience string or an array of allowed audiences
 - `cookieName?`: defaults to `logto_authtoken`
-- `requiredScope?`: rejects requests missing the given scope
+- `requiredScope?`: rejects requests missing the given exact OAuth scope
+- `requiredScopes?`: rejects requests missing scopes; pair with `scopeMode: 'all' | 'any'`
 - `allowGuest?`: enables guest auth fallback
 - `jwksCacheTtlMs?`: overrides the default 5 minute in-memory JWKS cache TTL
 - `skipJwksCache?`: bypasses the in-memory JWKS cache for a single verifier/middleware instance
 
 ### Multi-scope and role authorization helpers
 
-If you need more than the built-in single `requiredScope` check, use the backend authorization helpers after token verification:
+For authorization checks outside middleware, use the backend authorization helpers after token verification:
 
 ```ts
 import { hasRole, hasScopes, requireRole, requireScopes, verifyAuth } from '@ouim/logto-authkit/server'

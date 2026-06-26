@@ -22,6 +22,8 @@ export interface VerifyAuthOptions {
   audience?: string | string[] // optional — supports single-resource and multi-resource API setups
   cookieName?: string
   requiredScope?: string
+  requiredScopes?: string | string[]
+  scopeMode?: 'all' | 'any'
   allowGuest?: boolean
   jwksCacheTtlMs?: number
   skipJwksCache?: boolean

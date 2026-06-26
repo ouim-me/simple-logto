@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { LogtoUser, NavigationOptions } from './types.js'
+import type { AuthCookieOptions, LogtoUser, NavigationOptions } from './types.js'
 import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import type { LogtoConfig } from '@logto/react'
 
@@ -316,28 +316,32 @@ export const jwtCookieUtils = {
    * See: https://owasp.org/www-community/HttpOnly
    * ─────────────────────────────────────────────────────────────────────────
    */
-  saveToken: (token: string) => {
-    cookieUtils.setCookie('logto_authtoken', token, {
-      expires: 7, // 7 days
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
+  saveToken: (token: string, options: AuthCookieOptions = {}) => {
+    const { cookieName = 'logto_authtoken', expires = 30, secure = true, sameSite = 'strict', path = '/', ...rest } = options
+    cookieUtils.setCookie(cookieName, token, {
+      expires,
+      secure,
+      sameSite,
+      path,
+      ...rest,
     })
   },
 
   /**
    * Get JWT token from cookie
    */
-  getToken: (): string | null => {
-    return cookieUtils.getCookie('logto_authtoken')
+  getToken: (cookieName = 'logto_authtoken'): string | null => {
+    return cookieUtils.getCookie(cookieName)
   },
 
   /**
    * Remove JWT token from cookie
    */
-  removeToken: () => {
-    cookieUtils.removeCookie('logto_authtoken', {
-      path: '/',
+  removeToken: (options: Pick<AuthCookieOptions, 'cookieName' | 'domain' | 'path'> = {}) => {
+    const { cookieName = 'logto_authtoken', domain, path = '/' } = options
+    cookieUtils.removeCookie(cookieName, {
+      domain,
+      path,
     })
   },
 }
@@ -399,7 +403,7 @@ export const guestUtils = {
 
     const id = guestId || (await this.generateGuestId())
     cookieUtils.setCookie('guest_logto_authtoken', id, {
-      expires: 7, // 7 days (matches jwtCookieUtils.saveToken)
+      expires: 30, // 30 days (matches jwtCookieUtils.saveToken default)
       secure: true,
       sameSite: 'strict',
       path: '/',
