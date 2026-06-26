@@ -204,6 +204,7 @@ Props:
 - `callbackUrl?`: default auth callback URL
 - `customNavigate?`: custom navigation function for React Router, Next.js, or other SPA routers
 - `enablePopupSignIn?`: enables popup-based sign-in flow
+- `authCookie?`: optional browser cookie settings, such as custom `cookieName`, `path`, `domain`, `sameSite`, or retention
 - `onTokenRefresh?`: called when an already-authenticated session receives a different access token
 - `onAuthError?`: called when auth loading hits a transient or definitive auth error
 - `onSignOut?`: called immediately before the provider initiates local or global sign-out
@@ -612,7 +613,7 @@ interface AuthContext {
 
 ## Bundler Config
 
-This package includes bundler helpers for the `jose` resolution issues that often show up during Logto integration.
+This package includes small bundler helpers for Logto integration. They pre-bundle `@logto/react` for Vite and avoid unsupported deep aliases for `jose`, letting modern bundlers use `jose`'s official package exports.
 
 For build-time scripts, prefer the dedicated subpath:
 
