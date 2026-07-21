@@ -105,6 +105,28 @@ describe('createExpressAuthMiddleware integration', () => {
     })
   })
 
+  it('prefers an explicit Authorization header over an ambient auth cookie', async () => {
+    const logtoUrl = 'https://test.logto.app/express-bearer-precedence'
+    const staleCookieToken = `${validToken.slice(0, validToken.lastIndexOf('.'))}.stale-cookie`
+    vi.mocked(jwtVerify).mockResolvedValueOnce({
+      payload: buildPayload(logtoUrl),
+      protectedHeader: {},
+    } as never)
+
+    const app = buildApp({
+      logtoUrl,
+      audience: 'urn:logto:resource:api',
+    })
+
+    const response = await request(app)
+      .get('/session')
+      .set('Authorization', `Bearer ${validToken}`)
+      .set('Cookie', [`logto_authtoken=${staleCookieToken}`])
+
+    expect(response.status).toBe(200)
+    expect(jwtVerify).toHaveBeenCalledWith(validToken, expect.anything())
+  })
+
   it('rejects expired JWTs', async () => {
     const logtoUrl = 'https://test.logto.app/express-expired'
     vi.mocked(jwtVerify).mockResolvedValueOnce({

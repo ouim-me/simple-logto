@@ -196,6 +196,17 @@ const InternalAuthProvider = ({
   const [isLoadingUser, setIsLoadingUser] = useState<boolean>(true)
   const [flowError, setFlowError] = useState<Error | null>(null)
   const defaultResource = logtoConfig?.resources?.[0] || 'urn:logto:resource:default'
+  const getAccessTokenRef = useRef(getAccessToken)
+  const getIdTokenClaimsRef = useRef(getIdTokenClaims)
+  const logtoSignInRef = useRef(logtoSignIn)
+  const logtoSignOutRef = useRef(logtoSignOut)
+
+  useEffect(() => {
+    getAccessTokenRef.current = getAccessToken
+    getIdTokenClaimsRef.current = getIdTokenClaims
+    logtoSignInRef.current = logtoSignIn
+    logtoSignOutRef.current = logtoSignOut
+  }, [getAccessToken, getIdTokenClaims, logtoSignIn, logtoSignOut])
 
   // Rate limiting to prevent infinite calls
   const lastLoadTime = useRef<number>(0)
@@ -217,6 +228,9 @@ const InternalAuthProvider = ({
   const lastScheduledTokenExpRef = useRef<number | undefined>()
   /** Set to true in the unmount cleanup; guards async callbacks against firing on dead component. */
   const isUnmountedRef = useRef<boolean>(false)
+  /** Prevents Logto's transient loading state during token reads from retriggering full user hydration. */
+  const hasObservedReadyAuthRef = useRef<boolean>(false)
+  const lastObservedAuthenticatedRef = useRef<boolean | undefined>()
   /** Tracks the popup-closed polling interval so it can be cleared on provider unmount. */
   const popupIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>()
   /** Tracks the 5-minute popup auto-cleanup timer so it can be cleared on provider unmount. */
@@ -314,9 +328,9 @@ const InternalAuthProvider = ({
         callbackUrl: nextCallbackUrl,
         error,
       })
-      await logtoSignOut(nextCallbackUrl)
+      await logtoSignOutRef.current(nextCallbackUrl)
     },
-    [emitSignOut, logtoSignOut],
+    [emitSignOut],
   )
 
   const clearRefreshTimer = useCallback(() => {
@@ -343,10 +357,10 @@ const InternalAuthProvider = ({
 
   const getAccountAccessToken = useCallback(async (): Promise<string> => {
     if (!isAuthenticated) throw new Error('Sign in before managing your account.')
-    const token = await getAccessToken()
+    const token = await getAccessTokenRef.current()
     if (!token) throw new Error('The identity provider did not return an account access token.')
     return token
-  }, [getAccessToken, isAuthenticated])
+  }, [isAuthenticated])
 
   const getResourceAccessToken = useCallback(
     async (resource = defaultResource): Promise<string | undefined> => {
@@ -355,16 +369,16 @@ const InternalAuthProvider = ({
       if (!sync) {
         sync = (async () => {
           if (preferInitialToken) {
-            const initialToken = await getAccessToken()
+            const initialToken = await getAccessTokenRef.current()
             if (initialToken && tokenHasAudience(initialToken, resource)) return initialToken
           }
-          return getAccessToken(resource)
+          return getAccessTokenRef.current(resource)
         })().finally(() => tokenSyncs.delete(syncKey))
         tokenSyncs.set(syncKey, sync)
       }
       return sync
     },
-    [defaultResource, getAccessToken, logtoConfig.appId, preferInitialToken],
+    [defaultResource, logtoConfig.appId, preferInitialToken],
   )
 
   const getApiAccessToken = useCallback(
@@ -381,11 +395,11 @@ const InternalAuthProvider = ({
     async (organizationId: string, resource = defaultResource): Promise<string> => {
       if (!isAuthenticated) throw new Error('Sign in before accessing an organization.')
       if (!organizationId) throw new Error('An organization ID is required.')
-      const token = await getAccessToken(resource, organizationId)
+      const token = await getAccessTokenRef.current(resource, organizationId)
       if (!token) throw new Error(`The identity provider did not return an organization token for ${resource}.`)
       return token
     },
-    [defaultResource, getAccessToken, isAuthenticated],
+    [defaultResource, isAuthenticated],
   )
 
   const persistApiSession = useCallback(
@@ -468,7 +482,9 @@ const InternalAuthProvider = ({
       }
       lastLoadTime.current = now
 
-      setIsLoadingUser(true)
+      // Background refreshes must not tear down protected application routes.
+      // Keep the loaded user visible while a newer token/profile is synchronized.
+      if (!user) setIsLoadingUser(true)
 
       if (isAuthenticated) {
         if (localSignOutRef.current) {
@@ -484,7 +500,7 @@ const InternalAuthProvider = ({
         }
 
         try {
-          const claims = await getIdTokenClaims()
+          const claims = await getIdTokenClaimsRef.current()
           const jwt = await getResourceAccessToken(defaultResource)
 
           if (jwt) {
@@ -682,7 +698,6 @@ const InternalAuthProvider = ({
       emitAuthError,
       emitTokenRefresh,
       getResourceAccessToken,
-      getIdTokenClaims,
       isAuthenticated,
       isLoading,
       performGlobalSignOut,
@@ -691,15 +706,30 @@ const InternalAuthProvider = ({
       persistApiSession,
       scheduleTokenRefresh,
       setLocalSignOutState,
+      user,
     ],
   )
 
+  // Store the latest loadUser function without making the initial hydration effect
+  // depend on every callback exposed by the upstream SDK.
+  const loadUserRef = useRef(loadUser)
+  loadUserRef.current = loadUser
+
   useEffect(() => {
-    loadUser()
-  }, [loadUser])
+    if (isLoading) return
+
+    const isFirstReadyState = !hasObservedReadyAuthRef.current
+    const didAuthenticationChange = lastObservedAuthenticatedRef.current !== isAuthenticated
+    if (!isFirstReadyState && !didAuthenticationChange) return
+
+    hasObservedReadyAuthRef.current = true
+    lastObservedAuthenticatedRef.current = isAuthenticated
+    void loadUserRef.current()
+  }, [isAuthenticated, isLoading])
 
   // Clean up all async resources when this provider unmounts
   useEffect(() => {
+    isUnmountedRef.current = false
     return () => {
       // Mark as unmounted so any in-flight backoff callbacks do not call loadUser
       // on a dead component tree (guards against the timer/unmount race condition).
@@ -713,10 +743,6 @@ const InternalAuthProvider = ({
       clearTimeout(popupAuthRetryTimerRef.current)
     }
   }, [resetRefreshSchedule])
-
-  // Store the latest loadUser function in a ref to avoid recreating event listeners
-  const loadUserRef = useRef(loadUser)
-  loadUserRef.current = loadUser
 
   // Add effect to handle cross-window/tab authentication state changes
   useEffect(() => {
@@ -796,7 +822,7 @@ const InternalAuthProvider = ({
         // If we're already in a popup, just do direct sign-in without opening another popup
         const redirectUrl = overrideCallbackUrl || callbackUrl || window.location.href
         try {
-          await logtoSignIn(redirectUrl)
+          await logtoSignInRef.current(redirectUrl)
         } catch (error) {
           console.error('Sign-in failed:', error)
           throw error
@@ -809,7 +835,7 @@ const InternalAuthProvider = ({
       if (!shouldUsePopup) {
         const redirectUrl = overrideCallbackUrl || callbackUrl || window.location.href
         try {
-          await logtoSignIn(redirectUrl)
+          await logtoSignInRef.current(redirectUrl)
         } catch (error) {
           console.error('Sign-in failed:', error)
           throw error
@@ -899,7 +925,7 @@ const InternalAuthProvider = ({
         popupCleanupTimerRef.current = cleanupTimeoutId
       }
     },
-    [enablePopupSignIn, callbackUrl, logtoSignIn, queuePopupAuthRefresh, setLocalSignOutState],
+    [enablePopupSignIn, callbackUrl, queuePopupAuthRefresh, setLocalSignOutState],
   )
 
   const beginCurrentWindow = useCallback(
@@ -909,7 +935,7 @@ const InternalAuthProvider = ({
       window.sessionStorage.setItem(FLOW_STORAGE_KEY, JSON.stringify(flow))
       setFlowError(null)
       setLocalSignOutState(false)
-      const signInWithOptions = logtoSignIn as unknown as (options: Record<string, unknown>) => Promise<void>
+      const signInWithOptions = logtoSignInRef.current as unknown as (options: Record<string, unknown>) => Promise<void>
       await signInWithOptions({
         redirectUri,
         directSignIn: directSignInFor(flow.strategy),
@@ -917,7 +943,7 @@ const InternalAuthProvider = ({
         ...(flow.strategy === 'email' ? { firstScreen: 'identifier:sign_in' } : {}),
       })
     },
-    [callbackUrl, logtoSignIn, setLocalSignOutState],
+    [callbackUrl, setLocalSignOutState],
   )
 
   const openEnhancedPopup = useCallback(
@@ -1083,7 +1109,7 @@ const InternalAuthProvider = ({
       if (global) {
         setLocalSignOutState(false)
         // Global sign out - logs out from entire Logto ecosystem
-        await logtoSignOut(callbackUrl)
+        await logtoSignOutRef.current(callbackUrl)
       } else {
         // Local sign out - only clears local session
         setLocalSignOutState(true)
@@ -1103,7 +1129,7 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, removeAuthCookie, resetRefreshSchedule, sessionEndpoint, setLocalSignOutState],
+    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, removeAuthCookie, resetRefreshSchedule, sessionEndpoint, setLocalSignOutState],
   )
 
   const value: InternalAuthContextType = useMemo(
@@ -1111,7 +1137,10 @@ const InternalAuthProvider = ({
       endpoint: logtoConfig.endpoint,
       user,
       isLoadingUser,
-      isLoaded: !isLoadingUser && !isLoading,
+      // `useLogto().isLoading` also toggles during ordinary token reads. Exposing
+      // that transient state as application loading would unmount protected routes,
+      // remount their effects, and start the same token read again.
+      isLoaded: !isLoadingUser,
       isSignedIn: Boolean(user),
       error: flowError ?? logtoError ?? null,
       signIn,
@@ -1131,7 +1160,6 @@ const InternalAuthProvider = ({
       getAccountAccessToken,
       getApiAccessToken,
       getOrganizationAccessToken,
-      isLoading,
       logtoError,
       isLoadingUser,
       openSignIn,

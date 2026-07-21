@@ -1,6 +1,6 @@
 {
   "name": "@ouim/logto-authkit",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "A Logto auth kit with prebuilt React UI, hooks, server verification, and bundler helpers",
   "type": "module",
   "main": "dist/index.js",
@@ -69,7 +69,7 @@
     "lint:fix": "eslint . --fix",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "publish": "npm publish --access public --provenance"
+    "release:npm": "npm publish --access public --provenance"
   },
   "peerDependencies": {
     "@logto/react": "^3.0.0 || ^4.0.0",
