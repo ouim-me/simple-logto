@@ -220,7 +220,7 @@ function findMatchingKey(keys: JwkKey[], kid?: string, alg?: string): JwkKey {
  * Manually verify JWT token claims
  */
 function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): void {
-  const { logtoUrl, audience, requiredScope, requiredScopes, scopeMode = 'all' } = options
+  const { logtoUrl, audience, requiredScope, requiredScopes, scopeMode = 'all', requiredOrganizationId } = options
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined
   const nbf = typeof payload.nbf === 'number' ? payload.nbf : undefined
 
@@ -267,6 +267,10 @@ function verifyTokenClaims(payload: AuthPayload, options: VerifyAuthOptions): vo
       throw new Error(`Missing required scope: ${requiredScope}`)
     }
     throw new Error(`Missing required scopes (${scopeMode}: ${scopeRequirements.join(', ')})`)
+  }
+
+  if (requiredOrganizationId && payload.organization_id !== requiredOrganizationId) {
+    throw new Error(`Invalid organization context. Expected: ${requiredOrganizationId}, Got: ${payload.organization_id ?? '(none)'}`)
   }
 }
 
@@ -317,6 +321,9 @@ function validatePayloadShape(payload: unknown): asserts payload is AuthPayload 
   // downstream string operations on `payload.scope` never receive a non-string.
   if (p.scope !== undefined && typeof p.scope !== 'string') {
     throw new Error('JWT payload field "scope" must be a string')
+  }
+  if (p.organization_id !== undefined && (typeof p.organization_id !== 'string' || p.organization_id.trim() === '')) {
+    throw new Error('JWT payload field "organization_id" must be a non-empty string')
   }
 }
 

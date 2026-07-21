@@ -8,6 +8,7 @@ import {
   verifyAuth,
   verifyNextAuth,
 } from '@ouim/logto-authkit/server'
+import { createAuthSessionMiddleware, openAuthSession, sealAuthSession } from '@ouim/logto-authkit/server/session'
 
 const middleware = createExpressAuthMiddleware({
   logtoUrl: 'https://example.logto.app',
@@ -55,5 +56,9 @@ if (!hasRole(auth, 'admin')) {
 
 requireScopes(auth, ['read:profile', 'write:profile'])
 requireRole(auth, 'admin')
+
+if (typeof createAuthSessionMiddleware !== 'function' || typeof openAuthSession !== 'function' || typeof sealAuthSession !== 'function') {
+  throw new Error('Expected encrypted session helpers to be exported for ESM consumers.')
+}
 
 console.log('backend ESM smoke test passed')

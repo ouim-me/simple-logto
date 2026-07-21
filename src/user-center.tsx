@@ -14,7 +14,8 @@ import {
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu.js'
 import { Button } from './components/ui/button.js'
-import type { AdditionalPage } from './types.js'
+import { SignInDialog } from './auth-primitives.js'
+import type { AdditionalPage, SignInDialogProps } from './types.js'
 
 /**
  * UserCenter Component
@@ -61,6 +62,10 @@ export interface UserCenterProps {
   themeClassnames?: string
   signoutCallbackUrl?: string
   additionalPages?: AdditionalPage[]
+  /** Optional route containing AccountCenter or another account-management page. */
+  accountUrl?: string
+  /** Use the customizable in-app sign-in dialog for signed-out users. */
+  signInDialog?: Omit<SignInDialogProps, 'trigger'> | false
 }
 
 export const UserCenter: React.FC<UserCenterProps> = ({
@@ -68,6 +73,8 @@ export const UserCenter: React.FC<UserCenterProps> = ({
   globalSignOut = false,
   signoutCallbackUrl,
   additionalPages = [],
+  accountUrl,
+  signInDialog = false,
   themeClassnames = 'light:bg-stone-800 light:border-stone-700 light:text-stone-200',
 }) => {
   const { user, isLoadingUser, signOut, signIn } = useAuth()
@@ -111,6 +118,14 @@ export const UserCenter: React.FC<UserCenterProps> = ({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-slate-100" />
+          {accountUrl ? (
+            <DropdownMenuItem onSelect={() => navigateTo(accountUrl)}>
+              <Button variant="ghost" className="w-full flex text-left">
+                <User className="mr-2.5 h-4 w-4" />
+                Manage account
+              </Button>
+            </DropdownMenuItem>
+          ) : null}
           {additionalPages.map(({ link, text, icon }, idx) => (
             <DropdownMenuItem key={idx} onSelect={() => navigateTo(link)}>
               <Button variant={'ghost'} className="w-full flex text-left">
@@ -124,7 +139,7 @@ export const UserCenter: React.FC<UserCenterProps> = ({
               </Button>
             </DropdownMenuItem>
           ))}
-          {additionalPages.length > 0 && <DropdownMenuSeparator className="bg-slate-100" />}
+          {(accountUrl || additionalPages.length > 0) && <DropdownMenuSeparator className="bg-slate-100" />}
           <DropdownMenuItem onClick={() => signOut({ callbackUrl: finalSignoutUrl, global: globalSignOut })}>
             <Button variant={'destructive'} className="w-full flex text-left">
               <LogOut className="mr-2.5 h-4 w-4" />
@@ -136,14 +151,22 @@ export const UserCenter: React.FC<UserCenterProps> = ({
     )
   }
 
+  const signedOutTrigger = (
+    <Avatar className={`h-9 w-9 transition-all hover:ring-2 hover:ring-slate-200 ${className}`}>
+      <AvatarFallback className="bg-slate-50">
+        <UserCircle className="h-5 w-5 text-slate-400" />
+      </AvatarFallback>
+    </Avatar>
+  )
+
+  if (signInDialog) {
+    return <SignInDialog {...signInDialog} trigger={<button type="button" className="outline-none" aria-label="Sign in">{signedOutTrigger}</button>} />
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="outline-none">
-        <Avatar className={`h-9 w-9 transition-all hover:ring-2 hover:ring-slate-200 ${className}`}>
-          <AvatarFallback className="bg-slate-50">
-            <UserCircle className="h-5 w-5 text-slate-400" />
-          </AvatarFallback>
-        </Avatar>
+        {signedOutTrigger}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={`w-64 ${themeClassnames}`}>
         <DropdownMenuLabel className="px-3 py-2">

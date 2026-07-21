@@ -2,6 +2,30 @@
 
 This document covers changes in recent releases and how to update your code if needed.
 
+## v1 beta — Identity feature consolidation
+
+The v1 line keeps `@ouim/logto-authkit` as the single application-facing package. The temporary `@ouim/identity` experiment is not a dependency and should not be installed alongside AuthKit.
+
+Existing integrations remain valid. The following APIs are additive:
+
+```tsx
+import { SignInDialog, SignedIn, SignedOut, useSession, useUser } from '@ouim/logto-authkit'
+import { AccountCenter } from '@ouim/logto-authkit/account'
+import { OrganizationProvider, OrganizationSwitcher } from '@ouim/logto-authkit/organization'
+import '@ouim/logto-authkit/styles.css'
+```
+
+To adopt direct provider popups:
+
+1. Keep real `/signin` and `/callback` routes using `SignInPage` and `CallbackPage`.
+2. Add `signInPath`, `defaultSignInMode`, and `sessionPolicy` to `AuthProvider`.
+3. Render `SignInDialog`, or call `openSignIn({ strategy, mode, returnTo })`.
+4. Test local sign-out followed by sign-in, provider account choice, backend API authentication, and a hard reload.
+
+`signIn()` and `signIn(callbackUrl, usePopup)` still use the compatible hosted flow. No portal is required for sign-in, Account API operations, or backend verification.
+
+Organization administration and account deletion remain privileged. Configure an explicit trusted-server adapter; do not expose a Management API credential to the browser.
+
 ## v0.1.9+ (Unreleased) — Critical Fixes & Security Hardening
 
 ### Breaking Changes

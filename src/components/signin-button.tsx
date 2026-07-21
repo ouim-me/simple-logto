@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../useAuth.js'
 import { Button } from './ui/button.js'
 import type { ButtonProps } from './ui/button.js'
+import type { SignInOptions } from '../types.js'
 
 export interface SignInButtonProps extends Omit<ButtonProps, 'onClick'> {
   /**
@@ -22,6 +23,9 @@ export interface SignInButtonProps extends Omit<ButtonProps, 'onClick'> {
    * If not provided, defaults to the AuthProvider's enablePopupSignIn setting.
    */
   usePopup?: boolean
+
+  /** Enhanced provider, mode, return path, and session-policy options. */
+  options?: SignInOptions
 
   /**
    * Optional callback to execute before initiating sign-in.
@@ -65,13 +69,14 @@ export function SignInButton({
   label = 'Sign In',
   redirectUri,
   usePopup,
+  options,
   onBeforeSignIn,
   onAfterSignIn,
   onSignInError,
   disabled,
   ...buttonProps
 }: SignInButtonProps) {
-  const { signIn, isLoadingUser } = useAuth()
+  const { signIn, openSignIn, isLoadingUser } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
   const isButtonDisabled = disabled || isLoadingUser || isLoading
@@ -88,7 +93,11 @@ export function SignInButton({
       }
 
       // Initiate sign-in with provided options
-      await signIn(redirectUri, usePopup)
+      if (options) {
+        await openSignIn(options)
+      } else {
+        await signIn(redirectUri, usePopup)
+      }
 
       // Call after hook if provided
       if (onAfterSignIn) {

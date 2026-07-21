@@ -29,6 +29,17 @@ function readPermissionClaims(user: LogtoUser | null, claimKeys: string[]): stri
   return []
 }
 
+/** Pure permission helper for non-hook call sites and component primitives. */
+export function hasPermission(user: LogtoUser | null, permission: string | string[], options: UsePermissionOptions = {}): boolean {
+  const requiredPermissions = normalizePermissionInput(permission)
+  if (requiredPermissions.length === 0) return true
+  const claimKeys = options.claimKeys?.length ? options.claimKeys : DEFAULT_PERMISSION_CLAIM_KEYS
+  const grantedPermissions = readPermissionClaims(user, claimKeys)
+  return (options.mode ?? 'all') === 'any'
+    ? requiredPermissions.some(requiredPermission => grantedPermissions.includes(requiredPermission))
+    : requiredPermissions.every(requiredPermission => grantedPermissions.includes(requiredPermission))
+}
+
 /**
  * Return `true` when the current frontend auth user contains the requested permission claim.
  *
@@ -47,17 +58,6 @@ export function usePermission(
       return false
     }
 
-    const requiredPermissions = normalizePermissionInput(permission)
-    if (requiredPermissions.length === 0) {
-      return true
-    }
-
-    const claimKeys = options.claimKeys?.length ? options.claimKeys : DEFAULT_PERMISSION_CLAIM_KEYS
-    const grantedPermissions = readPermissionClaims(user, claimKeys)
-    const mode = options.mode ?? 'all'
-
-    return mode === 'any'
-      ? requiredPermissions.some(requiredPermission => grantedPermissions.includes(requiredPermission))
-      : requiredPermissions.every(requiredPermission => grantedPermissions.includes(requiredPermission))
+    return hasPermission(user, permission, { claimKeys: options.claimKeys, mode: options.mode })
   }, [isLoadingUser, options.claimKeys, options.mode, permission, user])
 }

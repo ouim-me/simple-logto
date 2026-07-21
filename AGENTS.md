@@ -17,6 +17,10 @@ It should help you answer four questions quickly:
 - Current published entrypoints:
   - `@ouim/logto-authkit`
   - `@ouim/logto-authkit/server`
+  - `@ouim/logto-authkit/server/session`
+  - `@ouim/logto-authkit/account`
+  - `@ouim/logto-authkit/organization`
+  - `@ouim/logto-authkit/styles.css`
   - `@ouim/logto-authkit/bundler-config`
 - Build output: `dist/` only
 - Source of truth for public exports:
@@ -88,6 +92,8 @@ Defined by [src/index.ts](G:\logto-authkit\src\index.ts). Current public surface
 - `CallbackPage`
 - `SignInPage`
 - `SignInButton`
+- `SignInDialog`, `SignedIn`, `SignedOut`, `AuthLoading`, `AuthError`, `Protect`
+- `useUser`, `useSession`
 - `getBundlerConfig`, `viteConfig`, `webpackConfig`, `nextjsConfig`
 - `cookieUtils`, `jwtCookieUtils`, `validateLogtoConfig`
 - frontend types from [src/types.ts](G:\logto-authkit\src\types.ts)
@@ -110,6 +116,13 @@ Defined by [src/server/index.ts](G:\logto-authkit\src\server\index.ts). Current 
 
 - Backed by [src/bundler-config.ts](G:\logto-authkit\src\bundler-config.ts)
 - Exists so consumers can import build-time config without pulling from the browser-oriented main entry
+
+### Optional feature entrypoints
+
+- `@ouim/logto-authkit/account`: direct Account API client and reusable account-center UI
+- `@ouim/logto-authkit/organization`: adapter-driven organization state and UI; no default portal dependency
+- `@ouim/logto-authkit/server/session`: encrypted server-only application sessions and key rotation
+- `@ouim/logto-authkit/styles.css`: styles for the optional visual primitives
 
 ## Frontend Architecture
 
@@ -362,6 +375,7 @@ Packed smoke tests matter because this is a library, not just an app. They catch
 Fixtures live in [smoke-fixtures/](G:\logto-authkit\smoke-fixtures):
 
 - `vite-react`
+- `react17`
 - `react-router`
 - `next-app-router`
 - `node-backend`

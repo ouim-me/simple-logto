@@ -6,6 +6,7 @@ export interface AuthPayload {
   exp?: number // expiration time (Unix seconds)
   nbf?: number // not before (Unix seconds)
   iat?: number // issued at (Unix seconds)
+  organization_id?: string
   [key: string]: unknown
 }
 
@@ -25,6 +26,8 @@ export interface VerifyAuthOptions {
   requiredScopes?: string | string[]
   scopeMode?: 'all' | 'any'
   allowGuest?: boolean
+  /** Require an exact trusted organization context from the verified token. */
+  requiredOrganizationId?: string
   jwksCacheTtlMs?: number
   skipJwksCache?: boolean
 }

@@ -10,6 +10,10 @@ export interface RoleCheckOptions {
   claimKeys?: string[]
 }
 
+export interface OrganizationCheckOptions {
+  claimKey?: string
+}
+
 type AuthSubject = AuthContext | AuthPayload | null | undefined
 const DEFAULT_ROLE_CLAIM_KEYS = ['roles', 'role']
 
@@ -151,4 +155,20 @@ export function requireRole(subject: AuthSubject, role: string, options: RoleChe
   throw new Error(
     `Missing required role: ${requiredRoles.join(', ')}. Checked claims: ${claimKeys.join(', ')}. Token roles: ${grantedRoles.join(', ') || '(none)'}`,
   )
+}
+
+/** Return true only when the verified token is scoped to the exact organization. */
+export function hasOrganization(subject: AuthSubject, organizationId: string, options: OrganizationCheckOptions = {}): boolean {
+  if (!organizationId) return false
+  const payload = getPayload(subject)
+  return payload?.[options.claimKey ?? 'organization_id'] === organizationId
+}
+
+/** Assert the exact organization context before performing tenant-owned operations. */
+export function requireOrganization(subject: AuthSubject, organizationId: string, options: OrganizationCheckOptions = {}): void {
+  if (!hasOrganization(subject, organizationId, options)) {
+    const payload = getPayload(subject)
+    const claimKey = options.claimKey ?? 'organization_id'
+    throw new Error(`Invalid organization context. Expected: ${organizationId}. Token ${claimKey}: ${String(payload?.[claimKey] ?? '(none)')}`)
+  }
 }

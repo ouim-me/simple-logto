@@ -9,6 +9,31 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] — 2026-07-21
+
+### Added
+- Customizable, vendor-neutral `SignInDialog` with branding, provider ordering, appearance tokens, and controlled state
+- Correlated popup flow IDs, exact opener/origin validation, safe local return paths, timeout/closed-window errors, and storage fallback
+- `automatic`, `explicit`, and `reauthenticate` session policies with direct Google/GitHub sign-in
+- `SignedIn`, `SignedOut`, `AuthLoading`, `AuthError`, `Protect`, `useUser`, and `useSession`
+- Direct Logto Account API client and reusable `AccountCenter` from `@ouim/logto-authkit/account`
+- Optional organization client/provider/switcher from `@ouim/logto-authkit/organization`
+- Exact organization-context verification and authorization helpers
+- Encrypted application-session helpers from `@ouim/logto-authkit/server/session`
+- Public stylesheet entrypoint at `@ouim/logto-authkit/styles.css`
+
+### Changed
+- Popup completion now remounts the Logto provider only after modal interaction locks are released
+- API-token synchronization is serialized and can recover a callback-issued token by verified audience
+- Optional account, organization, and encrypted-session features ship as tree-shakable subpath entrypoints
+- Existing string/boolean `signIn` calls and hosted Logto experience remain compatible
+
+### Security
+- Popup messages require the exact popup window, exact same origin, and random flow correlation ID
+- External return URLs are rejected
+- Organization helpers compare the trusted token claim instead of browser-supplied workspace state
+- Privileged account and organization mutations require explicit trusted-server adapters
+
 ## [0.3.0] — 2026-03-31
 
 ### Changed

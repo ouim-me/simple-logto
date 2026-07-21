@@ -77,21 +77,26 @@ Each fixture simulates a complete integration:
    - Bundler config helpers
    - ESM module resolution
 
-2. **React Router** (`react-router/`)
+2. **React 17** (`react17/`)
+   - React 17 rendering compatibility
+   - `@logto/react` 3 peer compatibility
+   - New account, organization, and style subpath exports
+
+3. **React Router** (`react-router/`)
    - Client-side routing with `useNavigate`
    - Custom `customNavigate` prop
 
-3. **Next.js App Router** (`next-app-router/`)
+4. **Next.js App Router** (`next-app-router/`)
    - React Server Components
    - API route with `verifyNextAuth`
    - Cookie-based auth
 
-4. **Node.js Backend** (`node-backend/`)
+5. **Node.js Backend** (`node-backend/`)
    - `verifyAuth` helper
    - Express.js middleware
    - JWKS verification
 
-5. **Bundler Config** (`bundler-config/`)
+6. **Bundler Config** (`bundler-config/`)
    - CommonJS imports
    - ESM imports
    - Webpack, Vite, and Next.js configs

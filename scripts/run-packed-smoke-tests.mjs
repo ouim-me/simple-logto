@@ -27,6 +27,13 @@ const fixtures = [
     ],
   },
   {
+    name: 'react17',
+    checks: [
+      ['run', 'typecheck'],
+      ['run', 'build'],
+    ],
+  },
+  {
     name: 'next-app-router',
     checks: [
       ['run', 'typecheck'],

@@ -1,7 +1,10 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { AuthProvider, CallbackPage, SignInButton, SignInPage, UserCenter, useAuth } from '@ouim/logto-authkit'
+import { AuthProvider, CallbackPage, SignInButton, SignInDialog, SignInPage, SignedIn, UserCenter, useAuth } from '@ouim/logto-authkit'
 import type { AuthProviderProps, CallbackPageProps, LogtoUser, SignInPageProps } from '@ouim/logto-authkit'
+import { AccountCenter, createAccountClient } from '@ouim/logto-authkit/account'
+import { createOrganizationClient, OrganizationProvider } from '@ouim/logto-authkit/organization'
+import '@ouim/logto-authkit/styles.css'
 
 const logtoConfig: AuthProviderProps['config'] = {
   endpoint: 'https://example.logto.app',
@@ -42,10 +45,17 @@ function DemoApp() {
     null,
     React.createElement('h1', null, label),
     React.createElement(SignInButton, null),
+    React.createElement(SignInDialog, { branding: { name: 'Smoke app' } }),
+    React.createElement(SignedIn, null, React.createElement('span', null, 'Signed in')),
     React.createElement(UserCenter, {
       additionalPages: [{ link: '/settings', text: 'Settings' }],
     }),
   )
 }
+
+void AccountCenter
+void OrganizationProvider
+void createAccountClient
+void createOrganizationClient
 
 createRoot(document.getElementById('app')!).render(React.createElement(AuthProvider, authProviderProps))

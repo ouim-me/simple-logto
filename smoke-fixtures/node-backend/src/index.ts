@@ -1,4 +1,5 @@
-import { createExpressAuthMiddleware, hasRole, hasScopes, requireRole, requireScopes } from '@ouim/logto-authkit/server'
+import { createExpressAuthMiddleware, hasOrganization, hasRole, hasScopes, requireOrganization, requireRole, requireScopes } from '@ouim/logto-authkit/server'
+import { createAuthSessionMiddleware, sealAuthSession } from '@ouim/logto-authkit/server/session'
 import type { AuthContext, VerifyAuthOptions } from '@ouim/logto-authkit/server'
 
 const options: VerifyAuthOptions = {
@@ -26,3 +27,7 @@ requireRole(authContext, 'admin')
 void authContext
 void middleware
 void canManageUsers
+void hasOrganization
+void requireOrganization
+void createAuthSessionMiddleware
+void sealAuthSession

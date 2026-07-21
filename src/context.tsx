@@ -3,6 +3,20 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { LogtoConfig, LogtoProvider, useLogto } from '@logto/react'
 import { transformUser, jwtCookieUtils, guestUtils, validateLogtoConfig } from './utils.js'
 import { NavigationProvider } from './navigation.js'
+import {
+  createFlowId,
+  directSignInFor,
+  FLOW_STORAGE_KEY,
+  getPopupFeatures,
+  normalizeSignInOptions,
+  POPUP_COMPLETE_STORAGE_KEY,
+  POPUP_TIMEOUT_MS,
+  promptFor,
+  SESSION_REHYDRATE_EVENT,
+  startPathFor,
+  tokenHasAudience,
+  type StoredAuthFlow,
+} from './flow.js'
 import type {
   AuthCookieOptions,
   AuthContextType,
@@ -11,7 +25,9 @@ import type {
   AuthSignOutEvent,
   AuthSignOutReason,
   AuthTokenRefreshEvent,
+  AuthSignIn,
   LogtoUser,
+  SignInOptions,
 } from './types.js'
 
 const POPUP_AUTH_EVENT_DELAY = 500
@@ -21,6 +37,7 @@ const LOCAL_SIGN_OUT_STORAGE_KEY = 'simple_logto_local_signout'
 const TOKEN_REFRESH_BUFFER_MS = 60_000
 const MIN_TOKEN_REFRESH_DELAY_MS = 1_000
 const TOKEN_REFRESH_RETRY_MS = 15_000
+const tokenSyncs = new Map<string, Promise<string | undefined>>()
 
 const decodeBase64Url = (value: string): string | null => {
   try {
@@ -79,7 +96,11 @@ const setLocalSignOutOverride = (active: boolean): void => {
 }
 
 // Create auth context
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+type InternalAuthContextType = AuthContextType & {
+  beginCurrentWindow: (flow: StoredAuthFlow, callbackUrl?: string) => Promise<void>
+}
+
+const AuthContext = createContext<InternalAuthContextType | undefined>(undefined)
 
 // Client-only wrapper to prevent SSR issues
 const ClientOnly = ({ children }: { children: React.ReactNode }) => {
@@ -145,6 +166,11 @@ const InternalAuthProvider = ({
   children,
   callbackUrl,
   enablePopupSignIn,
+  signInPath,
+  defaultSignInMode,
+  sessionPolicy,
+  sessionEndpoint,
+  preferInitialToken,
   logtoConfig,
   authCookie,
   onTokenRefresh,
@@ -154,15 +180,21 @@ const InternalAuthProvider = ({
   children: React.ReactNode
   callbackUrl?: string
   enablePopupSignIn?: boolean
+  signInPath?: string
+  defaultSignInMode?: AuthProviderProps['defaultSignInMode']
+  sessionPolicy?: AuthProviderProps['sessionPolicy']
+  sessionEndpoint?: string
+  preferInitialToken?: boolean
   logtoConfig: LogtoConfig // Logto configuration object
   authCookie?: AuthCookieOptions
   onTokenRefresh?: (event: AuthTokenRefreshEvent) => void
   onAuthError?: (event: AuthErrorEvent) => void
   onSignOut?: (event: AuthSignOutEvent) => void
 }) => {
-  const { isAuthenticated, isLoading, getIdTokenClaims, getAccessToken, signIn: logtoSignIn, signOut: logtoSignOut } = useLogto()
+  const { isAuthenticated, isLoading, error: logtoError, getIdTokenClaims, getAccessToken, signIn: logtoSignIn, signOut: logtoSignOut } = useLogto()
   const [user, setUser] = useState<LogtoUser | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState<boolean>(true)
+  const [flowError, setFlowError] = useState<Error | null>(null)
   const defaultResource = logtoConfig?.resources?.[0] || 'urn:logto:resource:default'
 
   // Rate limiting to prevent infinite calls
@@ -309,6 +341,70 @@ const InternalAuthProvider = ({
     setLocalSignOutOverride(active)
   }, [])
 
+  const getAccountAccessToken = useCallback(async (): Promise<string> => {
+    if (!isAuthenticated) throw new Error('Sign in before managing your account.')
+    const token = await getAccessToken()
+    if (!token) throw new Error('The identity provider did not return an account access token.')
+    return token
+  }, [getAccessToken, isAuthenticated])
+
+  const getResourceAccessToken = useCallback(
+    async (resource = defaultResource): Promise<string | undefined> => {
+      const syncKey = `${logtoConfig.appId}:${resource}`
+      let sync = tokenSyncs.get(syncKey)
+      if (!sync) {
+        sync = (async () => {
+          if (preferInitialToken) {
+            const initialToken = await getAccessToken()
+            if (initialToken && tokenHasAudience(initialToken, resource)) return initialToken
+          }
+          return getAccessToken(resource)
+        })().finally(() => tokenSyncs.delete(syncKey))
+        tokenSyncs.set(syncKey, sync)
+      }
+      return sync
+    },
+    [defaultResource, getAccessToken, logtoConfig.appId, preferInitialToken],
+  )
+
+  const getApiAccessToken = useCallback(
+    async (resource = defaultResource): Promise<string> => {
+      if (!isAuthenticated) throw new Error('Sign in before accessing this API.')
+      const token = await getResourceAccessToken(resource)
+      if (!token) throw new Error(`The identity provider did not return an access token for ${resource}.`)
+      return token
+    },
+    [defaultResource, getResourceAccessToken, isAuthenticated],
+  )
+
+  const getOrganizationAccessToken = useCallback(
+    async (organizationId: string, resource = defaultResource): Promise<string> => {
+      if (!isAuthenticated) throw new Error('Sign in before accessing an organization.')
+      if (!organizationId) throw new Error('An organization ID is required.')
+      const token = await getAccessToken(resource, organizationId)
+      if (!token) throw new Error(`The identity provider did not return an organization token for ${resource}.`)
+      return token
+    },
+    [defaultResource, getAccessToken, isAuthenticated],
+  )
+
+  const persistApiSession = useCallback(
+    async (token: string) => {
+      if (!sessionEndpoint) {
+        saveAuthCookie(token)
+        return
+      }
+      const response = await fetch(sessionEndpoint, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+        credentials: 'same-origin',
+      })
+      if (!response.ok) throw new Error('The application could not establish its protected server session.')
+      removeAuthCookie()
+    },
+    [removeAuthCookie, saveAuthCookie, sessionEndpoint],
+  )
+
   const queuePopupAuthRefresh = useCallback((delayMs = POPUP_AUTH_EVENT_DELAY) => {
     popupAuthPendingRef.current = true
     popupAuthRetryCountRef.current = 0
@@ -389,7 +485,7 @@ const InternalAuthProvider = ({
 
         try {
           const claims = await getIdTokenClaims()
-          const jwt = await getAccessToken(defaultResource)
+          const jwt = await getResourceAccessToken(defaultResource)
 
           if (jwt) {
             clearPopupAuthRetry()
@@ -398,7 +494,7 @@ const InternalAuthProvider = ({
             const tokenExp = getJwtExpiration(jwt)
             const previousToken = lastAccessTokenRef.current
             const previousExpiresAt = lastAccessTokenExpRef.current
-            saveAuthCookie(jwt)
+            await persistApiSession(jwt)
             setUser(nextUser)
             // Reset all error counters and any pending backoff on a successful fetch
             errorCount.current = 0
@@ -585,14 +681,14 @@ const InternalAuthProvider = ({
       defaultResource,
       emitAuthError,
       emitTokenRefresh,
-      getAccessToken,
+      getResourceAccessToken,
       getIdTokenClaims,
       isAuthenticated,
       isLoading,
       performGlobalSignOut,
       removeAuthCookie,
       resetRefreshSchedule,
-      saveAuthCookie,
+      persistApiSession,
       scheduleTokenRefresh,
       setLocalSignOutState,
     ],
@@ -686,7 +782,7 @@ const InternalAuthProvider = ({
     }
   }, [queuePopupAuthRefresh]) // Stable callback dependency keeps the listeners current without re-subscribing on every render.
 
-  const signIn = useCallback(
+  const legacySignIn = useCallback(
     async (overrideCallbackUrl?: string, usePopup?: boolean) => {
       // Only run on client side
       if (typeof window === 'undefined') return
@@ -806,18 +902,178 @@ const InternalAuthProvider = ({
     [enablePopupSignIn, callbackUrl, logtoSignIn, queuePopupAuthRefresh, setLocalSignOutState],
   )
 
+  const beginCurrentWindow = useCallback(
+    async (flow: StoredAuthFlow, nextCallbackUrl?: string) => {
+      if (typeof window === 'undefined') return
+      const redirectUri = nextCallbackUrl ?? callbackUrl ?? window.location.href
+      window.sessionStorage.setItem(FLOW_STORAGE_KEY, JSON.stringify(flow))
+      setFlowError(null)
+      setLocalSignOutState(false)
+      const signInWithOptions = logtoSignIn as unknown as (options: Record<string, unknown>) => Promise<void>
+      await signInWithOptions({
+        redirectUri,
+        directSignIn: directSignInFor(flow.strategy),
+        prompt: promptFor(flow.sessionPolicy),
+        ...(flow.strategy === 'email' ? { firstScreen: 'identifier:sign_in' } : {}),
+      })
+    },
+    [callbackUrl, logtoSignIn, setLocalSignOutState],
+  )
+
+  const openEnhancedPopup = useCallback(
+    (options: ReturnType<typeof normalizeSignInOptions>) => {
+      if (typeof window === 'undefined') return Promise.resolve()
+      const flow: StoredAuthFlow = {
+        id: createFlowId(),
+        popup: true,
+        returnTo: options.returnTo,
+        strategy: options.strategy,
+        sessionPolicy: options.sessionPolicy,
+      }
+      const popup = window.open(startPathFor(signInPath, flow), `authkit-${flow.id}`, getPopupFeatures())
+      if (!popup) {
+        const error = new Error('The sign-in popup was blocked. Allow popups for this site and try again.')
+        setFlowError(error)
+        return Promise.reject(error)
+      }
+
+      return new Promise<void>((resolve, reject) => {
+        let finished = false
+        const cleanup = () => {
+          window.removeEventListener('message', onMessage)
+          window.removeEventListener('storage', onStorage)
+          window.clearInterval(closedTimer)
+          window.clearTimeout(timeoutTimer)
+        }
+        const rehydrateWhenUnlocked = () => {
+          let checks = 0
+          const check = () => {
+            checks += 1
+            if (document.body.style.pointerEvents !== 'none' || checks >= 30) {
+              if (checks >= 30) document.body.style.removeProperty('pointer-events')
+              window.dispatchEvent(new CustomEvent(SESSION_REHYDRATE_EVENT))
+              return
+            }
+            window.requestAnimationFrame(check)
+          }
+          window.requestAnimationFrame(check)
+        }
+        const complete = () => {
+          if (finished) return
+          finished = true
+          cleanup()
+          popup.close()
+          setLocalSignOutState(false)
+          setFlowError(null)
+          resolve()
+          rehydrateWhenUnlocked()
+        }
+        const fail = (message: string) => {
+          if (finished) return
+          finished = true
+          cleanup()
+          const error = new Error(message)
+          setFlowError(error)
+          reject(error)
+        }
+        const matches = (value: unknown) => {
+          if (!value || typeof value !== 'object') return false
+          const message = value as { type?: unknown; flowId?: unknown }
+          return message.type === 'AUTHKIT_AUTH_COMPLETE' && message.flowId === flow.id
+        }
+        function onMessage(event: MessageEvent) {
+          if (event.origin !== window.location.origin || event.source !== popup) return
+          if (matches(event.data)) complete()
+          const message = event.data as { type?: unknown; flowId?: unknown }
+          if (message?.type === 'AUTHKIT_AUTH_ERROR' && message.flowId === flow.id) fail('Sign-in could not be completed. Try again.')
+        }
+        function onStorage(event: StorageEvent) {
+          if (event.key !== POPUP_COMPLETE_STORAGE_KEY || !event.newValue) return
+          try {
+            if (matches(JSON.parse(event.newValue))) {
+              window.localStorage.removeItem(POPUP_COMPLETE_STORAGE_KEY)
+              complete()
+            }
+          } catch {
+            // Ignore malformed cross-tab data. The window message remains authoritative.
+          }
+        }
+        window.addEventListener('message', onMessage)
+        window.addEventListener('storage', onStorage)
+        const closedTimer = window.setInterval(() => {
+          if (!popup.closed || finished) return
+          const stored = window.localStorage.getItem(POPUP_COMPLETE_STORAGE_KEY)
+          if (stored) {
+            try {
+              if (matches(JSON.parse(stored))) {
+                window.localStorage.removeItem(POPUP_COMPLETE_STORAGE_KEY)
+                complete()
+                return
+              }
+            } catch {
+              // Fall through to the user-facing closed state.
+            }
+          }
+          fail('The sign-in window was closed before authentication finished.')
+        }, 500)
+        const timeoutTimer = window.setTimeout(() => fail('Sign-in timed out. Open the dialog and try again.'), POPUP_TIMEOUT_MS)
+      })
+    },
+    [setLocalSignOutState, signInPath],
+  )
+
+  const openSignIn = useCallback(
+    async (rawOptions: SignInOptions = {}) => {
+      const options = normalizeSignInOptions(
+        { callbackUrl, enablePopupSignIn, signInPath, defaultSignInMode, sessionPolicy },
+        rawOptions,
+      )
+      setFlowError(null)
+      if (options.mode === 'popup') return openEnhancedPopup(options)
+      const flow: StoredAuthFlow = {
+        id: createFlowId(),
+        popup: false,
+        returnTo: options.returnTo,
+        strategy: options.strategy,
+        sessionPolicy: options.sessionPolicy,
+      }
+      try {
+        return await beginCurrentWindow(flow, options.callbackUrl)
+      } catch (caught) {
+        const error = toError(caught)
+        setFlowError(error)
+        throw error
+      }
+    },
+    [beginCurrentWindow, callbackUrl, defaultSignInMode, enablePopupSignIn, openEnhancedPopup, sessionPolicy, signInPath],
+  )
+
+  const signIn = useMemo(
+    () =>
+      (async (callbackOrOptions?: string | SignInOptions, usePopup?: boolean) => {
+        if (typeof callbackOrOptions === 'object') return openSignIn(callbackOrOptions)
+        if (callbackOrOptions === undefined && usePopup === undefined) return legacySignIn()
+        return legacySignIn(callbackOrOptions, usePopup)
+      }) as AuthSignIn,
+    [legacySignIn, openSignIn],
+  )
+
   const signOut = useCallback(
     async (options?: { callbackUrl?: string; global?: boolean }) => {
       // Only run on client side
       if (typeof window === 'undefined') return
 
       const { callbackUrl, global = true } = options || {}
+      setFlowError(null)
 
       // Always remove the JWT token cookie on sign out
       removeAuthCookie()
       resetRefreshSchedule()
       clearTrackedAccessToken()
       clearPopupAuthRetry()
+      if (sessionEndpoint) {
+        await fetch(sessionEndpoint, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined)
+      }
       emitSignOut({
         reason: 'user',
         global,
@@ -847,19 +1103,43 @@ const InternalAuthProvider = ({
       // Dispatch custom event to notify other windows/tabs
       window.dispatchEvent(new CustomEvent('auth-state-changed'))
     },
-    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, removeAuthCookie, resetRefreshSchedule, setLocalSignOutState],
+    [clearPopupAuthRetry, clearTrackedAccessToken, emitSignOut, logtoSignOut, removeAuthCookie, resetRefreshSchedule, sessionEndpoint, setLocalSignOutState],
   )
 
-  const value: AuthContextType = useMemo(
+  const value: InternalAuthContextType = useMemo(
     () => ({
+      endpoint: logtoConfig.endpoint,
       user,
       isLoadingUser,
+      isLoaded: !isLoadingUser && !isLoading,
+      isSignedIn: Boolean(user),
+      error: flowError ?? logtoError ?? null,
       signIn,
+      openSignIn,
       signOut,
       refreshAuth: () => loadUserRef.current(),
+      getAccountAccessToken,
+      getApiAccessToken,
+      getOrganizationAccessToken,
+      beginCurrentWindow,
       enablePopupSignIn,
     }),
-    [user, isLoadingUser, signIn, signOut, enablePopupSignIn],
+    [
+      beginCurrentWindow,
+      enablePopupSignIn,
+      flowError,
+      getAccountAccessToken,
+      getApiAccessToken,
+      getOrganizationAccessToken,
+      isLoading,
+      logtoError,
+      isLoadingUser,
+      openSignIn,
+      signIn,
+      signOut,
+      user,
+      logtoConfig.endpoint,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -914,11 +1194,23 @@ export const AuthProvider = ({
   callbackUrl,
   customNavigate,
   enablePopupSignIn = false,
+  signInPath,
+  defaultSignInMode,
+  sessionPolicy,
+  sessionEndpoint,
   authCookie,
   onTokenRefresh,
   onAuthError,
   onSignOut,
 }: AuthProviderProps) => {
+  const [providerGeneration, setProviderGeneration] = useState(0)
+
+  useEffect(() => {
+    const rehydrate = () => setProviderGeneration((current) => current + 1)
+    window.addEventListener(SESSION_REHYDRATE_EVENT, rehydrate)
+    return () => window.removeEventListener(SESSION_REHYDRATE_EVENT, rehydrate)
+  }, [])
+
   // Validate configuration on mount; also emit developer-friendly warnings in non-production
   // builds so misconfiguration is caught early with actionable messages and doc links.
   useEffect(() => {
@@ -953,12 +1245,17 @@ export const AuthProvider = ({
 
   return (
     <ClientOnly>
-      <LogtoProvider config={config}>
+      <LogtoProvider key={providerGeneration} config={config}>
         <NavigationProvider customNavigate={customNavigate}>
           <InternalAuthProvider
             logtoConfig={config}
             callbackUrl={callbackUrl}
             enablePopupSignIn={enablePopupSignIn}
+            signInPath={signInPath}
+            defaultSignInMode={defaultSignInMode}
+            sessionPolicy={sessionPolicy}
+            sessionEndpoint={sessionEndpoint}
+            preferInitialToken={providerGeneration > 0}
             authCookie={authCookie}
             onTokenRefresh={onTokenRefresh}
             onAuthError={onAuthError}
@@ -992,5 +1289,12 @@ export const useAuthContext = (): AuthContextType => {
     throw new Error('useAuthContext must be used within an AuthProvider')
   }
 
+  return context
+}
+
+/** @internal Used by SignInPage to preserve the correlated popup flow. */
+export const useInternalAuthContext = (): InternalAuthContextType => {
+  const context = useContext(AuthContext)
+  if (!context) throw new Error('Authentication components must be rendered inside AuthProvider.')
   return context
 }

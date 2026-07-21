@@ -1,0 +1,21 @@
+{
+  "name": "logto-authkit-smoke-react17",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@logto/react": "^3.0.0",
+    "@ouim/logto-authkit": "__SIMPLE_LOGTO_TARBALL__",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^17.0.80",
+    "@types/react-dom": "^17.0.25",
+    "typescript": "^5.8.3",
+    "vite": "^4.5.14"
+  }
+}

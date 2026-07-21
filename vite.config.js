@@ -27,12 +27,16 @@ export default defineConfig({
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
         'server/index': resolve(__dirname, 'src/server/index.ts'),
+        'server/session': resolve(__dirname, 'src/server/session.ts'),
+        account: resolve(__dirname, 'src/account-entry.ts'),
+        organization: resolve(__dirname, 'src/organization-entry.ts'),
         // expose bundler helpers as a separate bundle so consumers
         // can import them without pulling in the full React-based library
         'bundler-config': resolve(__dirname, 'src/bundler-config.ts'),
       },
       name: 'LogtoAuthKit',
       formats: ['es', 'cjs'],
+      cssFileName: 'style',
     },
     rollupOptions: {
       onwarn(warning, warn) {
