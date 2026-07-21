@@ -541,11 +541,13 @@ export function createExpressAuthMiddleware(options: VerifyAuthOptions) {
 
   const handler = async (req: ExpressRequest, res: ExpressResponse, next: ExpressNext) => {
     try {
-      // Try to get token from cookie first, then from Authorization header
-      let token = extractTokenFromCookies(req.cookies, options.cookieName)
+      // Prefer an explicit Bearer credential over ambient browser cookies. This
+      // also lets encrypted-session middleware hydrate a fresh token even when
+      // a stale legacy AuthKit cookie is still present on the request.
+      let token = extractBearerTokenFromHeaders(req.headers)
 
       if (!token) {
-        token = extractBearerTokenFromHeaders(req.headers)
+        token = extractTokenFromCookies(req.cookies, options.cookieName)
       }
 
       if (!token) {
@@ -684,11 +686,11 @@ export async function verifyNextAuth(
   options: VerifyAuthOptions,
 ): Promise<{ success: true; auth: AuthContext } | { success: false; error: string; auth?: AuthContext }> {
   try {
-    // Try to get token from cookie first, then from Authorization header
-    let token = extractTokenFromCookies(request.cookies, options.cookieName)
+    // Explicit credentials must win over ambient cookies (which may be stale).
+    let token = extractBearerTokenFromHeaders(request.headers)
 
     if (!token) {
-      token = extractBearerTokenFromHeaders(request.headers)
+      token = extractTokenFromCookies(request.cookies, options.cookieName)
     }
 
     if (!token) {
@@ -804,7 +806,7 @@ export async function verifyAuth(
   } else {
     // Extract from request object
     const extractedToken =
-      extractTokenFromCookies(tokenOrRequest.cookies, options.cookieName) || extractBearerTokenFromHeaders(tokenOrRequest.headers)
+      extractBearerTokenFromHeaders(tokenOrRequest.headers) || extractTokenFromCookies(tokenOrRequest.cookies, options.cookieName)
 
     if (!extractedToken) {
       // If allowGuest is enabled, check for guest cookie

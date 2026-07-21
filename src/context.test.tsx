@@ -100,6 +100,54 @@ describe('AuthProvider Context', () => {
     })
   })
 
+  it('keeps public token accessors stable when Logto refreshes its function references', async () => {
+    const getIdTokenClaims = vi.fn().mockResolvedValue({ sub: 'user-123' })
+    let upstreamLoading = false
+    vi.mocked(useLogto).mockImplementation(() =>
+      createMockLogtoContext({
+        isAuthenticated: true,
+        isLoading: upstreamLoading,
+        getIdTokenClaims,
+        getAccessToken: vi.fn().mockResolvedValue('mock-token'),
+      }),
+    )
+
+    let latestAuth: ReturnType<typeof useAuthContext> | undefined
+    const Probe = () => {
+      latestAuth = useAuthContext()
+      return <div>{latestAuth.isSignedIn ? 'signed in' : 'loading'}</div>
+    }
+    const tree = (renderKey: number) => (
+      <AuthProvider config={{ ...mockConfig, resources: ['https://api.example.test'] }}>
+        <Probe key={renderKey} />
+      </AuthProvider>
+    )
+
+    const { rerender } = render(tree(1))
+    await waitFor(() => expect(screen.getByText('signed in')).toBeInTheDocument())
+
+    const initialAccountAccessor = latestAuth?.getAccountAccessToken
+    const initialApiAccessor = latestAuth?.getApiAccessToken
+    const initialOrganizationAccessor = latestAuth?.getOrganizationAccessToken
+
+    rerender(tree(2))
+
+    upstreamLoading = true
+    rerender(tree(3))
+    expect(latestAuth?.isLoaded).toBe(true)
+    upstreamLoading = false
+    rerender(tree(4))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+
+    expect(latestAuth?.getAccountAccessToken).toBe(initialAccountAccessor)
+    expect(latestAuth?.getApiAccessToken).toBe(initialApiAccessor)
+    expect(latestAuth?.getOrganizationAccessToken).toBe(initialOrganizationAccessor)
+    expect(getIdTokenClaims).toHaveBeenCalledTimes(1)
+  })
+
   it('should initialize with unauthenticated state when user is not logged in', async () => {
     const TestComponent = () => {
       const auth = useAuthContext()

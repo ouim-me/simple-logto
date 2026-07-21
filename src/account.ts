@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useAuth } from './useAuth.js'
 
 export interface AccountProfile {
@@ -165,21 +165,29 @@ export type AccountClient = ReturnType<typeof createAccountClient> & { deleteAcc
 export function useAccountClient(options: AccountClientOptions = {}): AccountClient {
   const { endpoint: providerEndpoint, getAccountAccessToken, getApiAccessToken } = useAuth()
   const endpoint = options.endpoint ?? providerEndpoint
+  const getAccountAccessTokenRef = useRef(getAccountAccessToken)
+  const getApiAccessTokenRef = useRef(getApiAccessToken)
+  const managementAdapterRef = useRef(options.managementAdapter)
+  getAccountAccessTokenRef.current = getAccountAccessToken
+  getApiAccessTokenRef.current = getApiAccessToken
+  managementAdapterRef.current = options.managementAdapter
+
   return useMemo(
     () => ({
-      ...createAccountClient(endpoint, getAccountAccessToken),
+      ...createAccountClient(endpoint, () => getAccountAccessTokenRef.current()),
       async deleteAccount(confirmation: string) {
-        if (!options.managementAdapter) {
+        const managementAdapter = managementAdapterRef.current
+        if (!managementAdapter) {
           throw new Error('Account deletion requires an AccountManagementAdapter backed by a trusted server.')
         }
-        await options.managementAdapter.deleteAccount({
-          accessToken: await getApiAccessToken(),
+        await managementAdapter.deleteAccount({
+          accessToken: await getApiAccessTokenRef.current(),
           confirmation,
           idempotencyKey: crypto.randomUUID(),
         })
       },
     }),
-    [endpoint, getAccountAccessToken, getApiAccessToken, options.managementAdapter],
+    [endpoint],
   )
 }
 

@@ -146,12 +146,12 @@ describe('Express/Next.js Middleware Auth Flow', () => {
         expect(testReq.auth).toBeTruthy()
       })
 
-      it('should prefer cookie over Authorization header', async () => {
+      it('should prefer Authorization header over a stale cookie', async () => {
         const middleware = createExpressAuthMiddleware(mockOptions)
         const req = {
-          cookies: { logto_authtoken: validToken },
+          cookies: { logto_authtoken: 'different-token' },
           headers: {
-            authorization: 'Bearer different-token',
+            authorization: `Bearer ${validToken}`,
           },
         } as any
 
@@ -489,11 +489,11 @@ describe('Express/Next.js Middleware Auth Flow', () => {
         expect(result.auth?.userId).toBe('user-123')
       })
 
-      it('should prefer Next.js cookie over Authorization header', async () => {
+      it('should prefer a Next.js Authorization header over a stale cookie', async () => {
         const cookieMock = {
           get: vi.fn((name: string) => {
             if (name === 'logto_authtoken') {
-              return { value: validToken }
+              return { value: 'different-token' }
             }
             return undefined
           }),
@@ -504,7 +504,7 @@ describe('Express/Next.js Middleware Auth Flow', () => {
           headers: {
             get: vi.fn((name: string) => {
               if (name === 'authorization') {
-                return 'Bearer different-token'
+                return `Bearer ${validToken}`
               }
               return null
             }),

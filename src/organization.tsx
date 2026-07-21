@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './useAuth.js'
 
 export interface Organization {
@@ -130,13 +130,17 @@ export interface OrganizationProviderProps {
 
 export function OrganizationProvider({ children, client: suppliedClient, endpoint, storageKey = 'logto-authkit:active-organization' }: OrganizationProviderProps) {
   const { getApiAccessToken, getOrganizationAccessToken } = useAuth()
+  const getApiAccessTokenRef = useRef(getApiAccessToken)
+  const getOrganizationAccessTokenRef = useRef(getOrganizationAccessToken)
+  getApiAccessTokenRef.current = getApiAccessToken
+  getOrganizationAccessTokenRef.current = getOrganizationAccessToken
   const client = useMemo(() => {
     if (suppliedClient) return suppliedClient
     if (!endpoint) throw new Error('OrganizationProvider requires either a client or endpoint.')
     return createOrganizationClient(endpoint, (organizationId) =>
-      organizationId ? getOrganizationAccessToken(organizationId) : getApiAccessToken(),
+      organizationId ? getOrganizationAccessTokenRef.current(organizationId) : getApiAccessTokenRef.current(),
     )
-  }, [endpoint, getApiAccessToken, getOrganizationAccessToken, suppliedClient])
+  }, [endpoint, suppliedClient])
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [activeId, setActiveId] = useState(() =>
     typeof window === 'undefined' ? '' : (window.localStorage.getItem(storageKey) ?? ''),
