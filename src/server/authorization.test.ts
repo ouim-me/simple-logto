@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasRole, hasScopes, requireRole, requireScopes } from './authorization'
+import { hasOrganization, hasRole, hasScopes, requireOrganization, requireRole, requireScopes } from './authorization'
 import type { AuthContext, AuthPayload } from './types'
 
 function buildPayload(overrides: Partial<AuthPayload> = {}): AuthPayload {
@@ -19,6 +19,19 @@ function buildAuthContext(payload: AuthPayload | null): AuthContext {
     isGuest: false,
   }
 }
+
+describe('organization authorization', () => {
+  const payload = buildPayload({ organization_id: 'org-1' })
+
+  it('matches only the exact verified organization claim', () => {
+    expect(hasOrganization(payload, 'org-1')).toBe(true)
+    expect(hasOrganization(payload, 'org-2')).toBe(false)
+  })
+
+  it('throws before cross-organization access', () => {
+    expect(() => requireOrganization(payload, 'org-2')).toThrow('Invalid organization context')
+  })
+})
 
 describe('scope authorization helpers', () => {
   it('returns true when all required scopes are present by default', () => {

@@ -23,7 +23,11 @@ If you want Logto without re-assembling the same frontend and backend auth plumb
 - `CallbackPage` for redirect and popup callback handling
 - `SignInPage` for dedicated `/signin` routes
 - `SignInButton` for drop-in sign-in triggers
-- popup sign-in support
+- customizable, provider-aware `SignInDialog`
+- correlated popup sign-in with explicit session policies
+- signed-in/out/loading/error and permission primitives
+- direct Account API client and reusable account center via the `/account` entrypoint
+- optional organization adapters and switcher via the `/organization` entrypoint
 - guest mode support
 - custom navigation support for SPA routers
 
@@ -36,6 +40,8 @@ If you want Logto without re-assembling the same frontend and backend auth plumb
 - optional scope checks
 - cookie and bearer-token extraction
 - guest-aware auth context support
+- exact organization-context enforcement
+- optional encrypted application sessions via `/server/session`
 
 ### Build tooling
 
@@ -99,6 +105,7 @@ The [example_app/](./example_app/) directory contains a complete Vite React play
 [smoke-fixtures/](./smoke-fixtures/) contains automated tests for:
 
 - Vite + React integration
+- React 17 + `@logto/react` 3 compatibility
 - Next.js App Router integration
 - React Router integration
 - Node.js backend verification
@@ -117,6 +124,7 @@ These validate the package works across different bundler and framework combinat
 
 ```tsx
 import { AuthProvider } from '@ouim/logto-authkit'
+import '@ouim/logto-authkit/styles.css'
 
 const logtoConfig = {
   endpoint: 'https://your-tenant.logto.app',
@@ -192,6 +200,98 @@ export function Navbar() {
 
 ![UserCenter logged in](docs/assets/image-1.png)
 
+## Custom Sign-In Experience
+
+Normal authentication does not require a portal or another service. The consuming application talks directly to its configured Logto tenant:
+
+```text
+your application -> @ouim/logto-authkit -> Logto
+```
+
+Enable the app-owned popup experience and mount the existing sign-in and callback routes:
+
+```tsx
+import { AuthProvider, CallbackPage, SignInDialog, SignInPage } from '@ouim/logto-authkit'
+import '@ouim/logto-authkit/styles.css'
+
+<AuthProvider
+  config={logtoConfig}
+  callbackUrl="http://localhost:3000/callback"
+  signInPath="/signin"
+  defaultSignInMode="popup"
+  sessionPolicy="explicit"
+>
+  <SignInDialog
+    branding={{ name: 'My application', logoUrl: '/logo.svg' }}
+    title="Continue to My application"
+    description="Choose an account to continue."
+    appearance={{ theme: 'dark', accentColor: '#60a5fa', radius: '20px' }}
+  />
+</AuthProvider>
+
+// /signin -> <SignInPage />
+// /callback -> <CallbackPage />
+```
+
+`SignInDialog` owns only the application UI. Google and GitHub still authenticate in a secure popup. Email, MFA, recovery, and credential collection remain with Logto.
+
+Session policies:
+
+- `automatic`: the tenant session may be reused silently.
+- `explicit`: a new provider interaction is required; Google can display its account chooser when the connector uses `select_account`.
+- `reauthenticate`: currently performs the same OIDC login challenge as `explicit`, with room for stricter provider-specific policies later.
+
+The legacy `signIn(callbackUrl?, usePopup?)` API remains supported. The object API enables provider selection:
+
+```tsx
+const { openSignIn } = useAuth()
+
+await openSignIn({ strategy: 'google', mode: 'popup', returnTo: '/dashboard' })
+```
+
+## Account Center
+
+Account operations use the signed-in user’s Account API token and communicate directly with Logto. No Management API credential is placed in the browser.
+
+```tsx
+import { AccountCenter } from '@ouim/logto-authkit/account'
+import '@ouim/logto-authkit/styles.css'
+
+<AccountCenter
+  onSuccess={message => toast.success(message)}
+  onError={message => toast.error(message)}
+/>
+```
+
+The account entrypoint includes profile, password, MFA, session, authorized-app, identity-linking, passkey, and verification operations. Administrative account deletion is intentionally unavailable unless the application supplies an `AccountManagementAdapter` backed by a trusted server.
+
+## Organizations Are Optional
+
+Ordinary authentication works without an organization service. Applications that need workspaces can provide their own compatible backend or the optional identity portal:
+
+```tsx
+import { OrganizationProvider, OrganizationSwitcher } from '@ouim/logto-authkit/organization'
+
+<OrganizationProvider endpoint="/api/identity">
+  <OrganizationSwitcher />
+</OrganizationProvider>
+```
+
+The browser obtains user or organization-scoped tokens; the trusted backend owns Management API credentials and must verify the exact `organization_id` before operating on tenant data. There is no default portal URL or hardcoded `/api/identity` request.
+
+## Encrypted Application Sessions
+
+For deployments that do not want a JavaScript-readable API-token cookie, exchange the verified token for an encrypted HttpOnly application session and hydrate it before AuthKit’s normal verifier:
+
+```ts
+import { createAuthSessionMiddleware, sealAuthSession } from '@ouim/logto-authkit/server/session'
+
+const encrypted = await sealAuthSession(accessToken, process.env.AUTH_SESSION_SECRET)
+app.use(createAuthSessionMiddleware({ secrets: [process.env.AUTH_SESSION_SECRET] }))
+```
+
+Keep session secrets server-only. During rotation, list the new key first and the previous key second.
+
 ## Frontend API
 
 ### `AuthProvider`
@@ -204,6 +304,10 @@ Props:
 - `callbackUrl?`: default auth callback URL
 - `customNavigate?`: custom navigation function for React Router, Next.js, or other SPA routers
 - `enablePopupSignIn?`: enables popup-based sign-in flow
+- `signInPath?`: local route containing `SignInPage`; defaults to `/signin`
+- `defaultSignInMode?`: `popup` or `redirect` for the object-style sign-in API
+- `sessionPolicy?`: `automatic`, `explicit`, or `reauthenticate`
+- `sessionEndpoint?`: optional same-origin API-token exchange for an HttpOnly application session
 - `authCookie?`: optional browser cookie settings, such as custom `cookieName`, `path`, `domain`, `sameSite`, or retention
 - `onTokenRefresh?`: called when an already-authenticated session receives a different access token
 - `onAuthError?`: called when auth loading hits a transient or definitive auth error

@@ -46,4 +46,11 @@ jobs:
         run: npm run test:package
 
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$VERSION" == *-* ]]; then
+            npm publish --access public --provenance --tag next
+          else
+            npm publish --access public --provenance
+          fi

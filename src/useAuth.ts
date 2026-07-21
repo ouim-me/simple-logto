@@ -89,3 +89,13 @@ export const useAuth = (options?: AuthOptions): AuthContextType => {
 
   return auth
 }
+
+export const useUser = () => {
+  const { user, isLoaded, isSignedIn } = useAuth()
+  return { user, isLoaded, isSignedIn }
+}
+
+export const useSession = () => {
+  const { isLoaded, isSignedIn, signOut, refreshAuth } = useAuth()
+  return { isLoaded, isSignedIn, signOut, refresh: refreshAuth }
+}

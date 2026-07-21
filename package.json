@@ -1,6 +1,6 @@
 {
   "name": "@ouim/logto-authkit",
-  "version": "0.3.1",
+  "version": "1.0.0-beta.1",
   "description": "A Logto auth kit with prebuilt React UI, hooks, server verification, and bundler helpers",
   "type": "module",
   "main": "dist/index.js",
@@ -23,22 +23,41 @@
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
     },
+    "./server/session": {
+      "types": "./dist/server/session.d.ts",
+      "import": "./dist/server/session.js",
+      "require": "./dist/server/session.cjs"
+    },
+    "./account": {
+      "types": "./dist/account-entry.d.ts",
+      "import": "./dist/account.js",
+      "require": "./dist/account.cjs"
+    },
+    "./organization": {
+      "types": "./dist/organization-entry.d.ts",
+      "import": "./dist/organization.js",
+      "require": "./dist/organization.cjs"
+    },
     "./bundler-config": {
       "types": "./dist/bundler-config.d.ts",
       "import": "./dist/bundler-config.js",
       "require": "./dist/bundler-config.cjs"
-    }
+    },
+    "./styles.css": "./dist/style.css"
   },
   "browser": {
     "./dist/index.js": "./dist/index.js"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json --emitDeclarationOnly",
     "build:tsc": "tsc",
+    "typecheck": "tsc --project tsconfig.build.json --noEmit",
     "dev": "tsc --watch",
     "dev:example": "npm --prefix example_app run dev",
     "test": "vitest",

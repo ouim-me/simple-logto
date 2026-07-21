@@ -2,6 +2,28 @@
 
 This module provides JWT verification helpers for Node.js applications using Logto authentication. The verification is done manually by fetching public keys from Logto's JWKS endpoint and verifying JWT claims locally, providing better control and performance with built-in caching.
 
+## Organization context
+
+Use `requiredOrganizationId` during verification or call `requireOrganization()` after verification. Always derive the expected organization from trusted server routing or membership state rather than accepting an unchecked browser value.
+
+```ts
+const auth = await verifyAuth(request, {
+  logtoUrl,
+  audience: apiResource,
+  requiredOrganizationId: organization.id,
+})
+```
+
+## Encrypted application sessions
+
+Encrypted session helpers are isolated in the server-only subpath:
+
+```ts
+import { createAuthSessionMiddleware, sealAuthSession } from '@ouim/logto-authkit/server/session'
+```
+
+Use `sealAuthSession()` after verifying the incoming API token, set the encrypted result as a host-only `Secure`, `HttpOnly` cookie, then run `createAuthSessionMiddleware()` before AuthKit’s token verifier. Supply previous secrets after the current secret during key rotation.
+
 ## Features
 
 - ✅ Manual JWT verification with JWKS caching
