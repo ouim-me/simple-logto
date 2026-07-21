@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar.js'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -111,12 +112,14 @@ export const UserCenter: React.FC<UserCenterProps> = ({
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className={`w-64 ${themeClassnames}`}>
-          <DropdownMenuLabel className="px-2 py-2">
-            <div className="flex flex-col space-y-1">
-              <p className={`text-sm font-semibold `}>{user.name || 'User'}</p>
-              {user.email && <p className={`text-xs text-slate-500 truncate `}>{user.email}</p>}
-            </div>
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="px-2 py-2">
+              <div className="flex flex-col space-y-1">
+                <p className={`text-sm font-semibold `}>{user.name || 'User'}</p>
+                {user.email && <p className={`text-xs text-slate-500 truncate `}>{user.email}</p>}
+              </div>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator className="bg-slate-100" />
           {accountUrl ? (
             <DropdownMenuItem onClick={() => navigateTo(accountUrl)}>
@@ -169,9 +172,11 @@ export const UserCenter: React.FC<UserCenterProps> = ({
         {signedOutTrigger}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={`w-64 ${themeClassnames}`}>
-        <DropdownMenuLabel className="px-3 py-2">
-          <p className={`text-sm font-medium ${themeClassnames}`}>Sign in to your account</p>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="px-3 py-2">
+            <p className={`text-sm font-medium ${themeClassnames}`}>Sign in to your account</p>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator className="bg-slate-100" />
         <DropdownMenuItem onClick={() => signIn()}>
           <Button variant={'default'} className=" w-full flex gap-1.5 text-left">

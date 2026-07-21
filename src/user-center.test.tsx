@@ -54,6 +54,7 @@ vi.mock('./components/ui/dropdown-menu', () => ({
       {children}
     </div>
   ),
+  DropdownMenuGroup: ({ children }: any) => <div data-testid="dropdown-group">{children}</div>,
   DropdownMenuLabel: ({ children }: any) => <div data-testid="dropdown-label">{children}</div>,
   DropdownMenuSeparator: ({ className }: any) => <div data-testid="dropdown-separator" className={className} />,
   DropdownMenuItem: ({ children, onSelect, onClick }: any) => (
