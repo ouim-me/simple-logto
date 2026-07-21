@@ -119,7 +119,7 @@ export const UserCenter: React.FC<UserCenterProps> = ({
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-slate-100" />
           {accountUrl ? (
-            <DropdownMenuItem onSelect={() => navigateTo(accountUrl)}>
+            <DropdownMenuItem onClick={() => navigateTo(accountUrl)}>
               <Button variant="ghost" className="w-full flex text-left">
                 <User className="mr-2.5 h-4 w-4" />
                 Manage account
@@ -127,7 +127,7 @@ export const UserCenter: React.FC<UserCenterProps> = ({
             </DropdownMenuItem>
           ) : null}
           {additionalPages.map(({ link, text, icon }, idx) => (
-            <DropdownMenuItem key={idx} onSelect={() => navigateTo(link)}>
+            <DropdownMenuItem key={idx} onClick={() => navigateTo(link)}>
               <Button variant={'ghost'} className="w-full flex text-left">
                 {icon &&
                   (React.isValidElement(icon)

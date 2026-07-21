@@ -1,6 +1,11 @@
 'use client'
 
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './components/ui/dropdown-menu.js'
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './useAuth.js'
@@ -196,24 +201,22 @@ export const useOrganization = () => {
 export function OrganizationSwitcher({ className }: { className?: string }) {
   const { organizations, activeOrganization, setActiveOrganization } = useOrganizationList()
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger className={`logto-authkit-org-switcher ${className ?? ''}`}>
+    <DropdownMenu>
+      <DropdownMenuTrigger className={`logto-authkit-org-switcher ${className ?? ''}`}>
         <span>{activeOrganization?.logo ? <img src={activeOrganization.logo} alt="" /> : <Building2 />}</span>
         <strong>{activeOrganization?.name ?? 'Choose organization'}</strong>
         <ChevronsUpDown />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="logto-authkit-menu" align="start" sideOffset={8}>
-          {organizations.map((organization) => (
-            <DropdownMenu.Item key={organization.id} className="logto-authkit-menu-item" onSelect={() => setActiveOrganization(organization.id)}>
-              <Building2 />
-              {organization.name}
-              {organization.id === activeOrganization?.id ? <Check /> : null}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="logto-authkit-menu" align="start" sideOffset={8}>
+        {organizations.map((organization) => (
+          <DropdownMenuItem key={organization.id} className="logto-authkit-menu-item" onClick={() => setActiveOrganization(organization.id)}>
+            <Building2 />
+            {organization.name}
+            {organization.id === activeOrganization?.id ? <Check /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
